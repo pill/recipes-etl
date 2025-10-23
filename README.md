@@ -438,8 +438,10 @@ docker-compose -f docker-compose.python.yml logs temporal
 
 - Check logs: `docker-compose -f docker-compose.python.yml logs -f`
 - Run tests: `pytest tests/`
-- Review documentation: [README_PYTHON.md](./README_PYTHON.md)
-- Check [TEMPORAL_GUIDE.md](./TEMPORAL_GUIDE.md) for workflow issues
+- Review documentation: [docs/](./docs/)
+- Quick start: [docs/QUICK_START.md](./docs/QUICK_START.md)
+- Temporal workflows: [docs/TEMPORAL_GUIDE.md](./docs/TEMPORAL_GUIDE.md)
+- Code guidelines: [docs/AGENTS.md](./docs/AGENTS.md)
 
 ## 📄 License
 
@@ -454,6 +456,19 @@ MIT License - see LICENSE file for details
 
 ---
 
-**Note**: This is the Python version of the recipes project. The TypeScript client application in `client/recipe-client/` remains unchanged and can communicate with this Python backend.
+## 📚 Documentation
 
-For detailed migration information, see [MIGRATION_COMPLETE.md](./MIGRATION_COMPLETE.md).
+All project documentation is now organized in the [`docs/`](./docs/) directory:
+
+- **[Quick Start Guide](./docs/QUICK_START.md)** - Get up and running quickly
+- **[Temporal Guide](./docs/TEMPORAL_GUIDE.md)** - Workflow setup and usage
+- **[Elasticsearch Guide](./docs/ELASTICSEARCH_GUIDE.md)** - Search setup and queries
+- **[Pipeline Examples](./docs/PIPELINE_EXAMPLE.md)** - Processing examples
+- **[Code Guidelines](./docs/AGENTS.md)** - Style and testing standards
+- **[Migration Notes](./docs/MIGRATION_COMPLETE.md)** - TypeScript to Python migration
+
+See [docs/README.md](./docs/README.md) for the complete documentation index.
+
+---
+
+**Note**: This is the Python version of the recipes project. The TypeScript client application in `client/` remains unchanged and can communicate with this Python backend.
