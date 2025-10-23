@@ -2,13 +2,126 @@
 
 import json
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from temporalio import activity
 from ..services.ai_service import get_ai_service
 from ..services.recipe_service import RecipeService
 from ..utils.csv_parser import CSVParser
 from ..utils.json_processor import JSONProcessor
 from ..utils.local_parser import LocalRecipeParser
+from ..models.schemas import RecipeSchema, RecipeIngredientSchema, RecipeInstructionSchema
+
+
+async def _parse_structured_recipe(entry_data: Dict[str, Any]) -> RecipeSchema:
+    """Parse structured recipe data from Stromberg CSV format.
+    
+    Args:
+        entry_data: Dictionary with 'ingredients' and 'directions' as JSON arrays
+        
+    Returns:
+        RecipeSchema object
+    """
+    import ast
+    
+    # Parse ingredients from JSON array string
+    ingredients_str = entry_data.get('ingredients', '[]')
+    try:
+        ingredients_list = ast.literal_eval(ingredients_str)
+    except (ValueError, SyntaxError):
+        ingredients_list = []
+    
+    # Parse directions from JSON array string  
+    directions_str = entry_data.get('directions', '[]')
+    try:
+        directions_list = ast.literal_eval(directions_str)
+    except (ValueError, SyntaxError):
+        directions_list = []
+    
+    # Convert ingredients to RecipeIngredientSchema
+    recipe_ingredients = []
+    for ing_str in ingredients_list:
+        if isinstance(ing_str, str) and ing_str.strip():
+            # Parse ingredient string (e.g., "1 cup flour")
+            parsed_ing = _parse_ingredient_string(ing_str.strip())
+            recipe_ingredients.append(parsed_ing)
+    
+    # Convert directions to RecipeInstructionSchema
+    recipe_instructions = []
+    for i, dir_str in enumerate(directions_list, 1):
+        if isinstance(dir_str, str) and dir_str.strip():
+            recipe_instructions.append(RecipeInstructionSchema(
+                step=i,
+                title=f"Step {i}",
+                description=dir_str.strip()
+            ))
+    
+    # Extract metadata using local parser
+    local_parser = LocalRecipeParser()
+    title = entry_data.get('title', '').strip()
+    
+    # Create basic recipe
+    recipe = RecipeSchema(
+        title=title or "Untitled Recipe",
+        description=None,
+        ingredients=recipe_ingredients,
+        instructions=recipe_instructions,
+        prepTime=None,
+        cookTime=None,
+        difficulty=None,
+        cuisine=None,
+        mealType=None,
+        dietaryTags=None
+    )
+    
+    # Extract metadata from title and ingredients
+    if title:
+        # Create ingredients list for metadata extraction
+        ingredients_list = [ing.item for ing in recipe_ingredients if ing.item]
+        
+        recipe.difficulty = local_parser._extract_difficulty("", title)
+        recipe.cuisine = local_parser._extract_cuisine("", title, ingredients_list)
+        recipe.mealType = local_parser._extract_meal_type("", title, ingredients_list)
+        recipe.dietaryTags = local_parser._extract_dietary_tags("", title, ingredients_list)
+    
+    return recipe
+
+
+def _parse_ingredient_string(ing_str: str) -> RecipeIngredientSchema:
+    """Parse ingredient string like '1 cup flour' into structured data."""
+    import re
+    
+    # Common patterns for ingredients
+    patterns = [
+        r'^(\d+(?:\.\d+)?(?:\/\d+)?)\s*([a-zA-Z]+)\s+(.+)$',  # "1 cup flour"
+        r'^(\d+(?:\.\d+)?(?:\/\d+)?)\s+(.+)$',  # "2 eggs"
+        r'^(.+)$',  # "salt to taste"
+    ]
+    
+    for pattern in patterns:
+        match = re.match(pattern, ing_str.strip())
+        if match:
+            groups = match.groups()
+            if len(groups) == 3:  # "1 cup flour"
+                return RecipeIngredientSchema(
+                    item=groups[2],  # ingredient name
+                    amount=f"{groups[0]} {groups[1]}"  # "1 cup"
+                )
+            elif len(groups) == 2:  # "2 eggs"
+                return RecipeIngredientSchema(
+                    item=groups[1],  # ingredient name
+                    amount=groups[0]  # "2"
+                )
+            else:  # "salt to taste"
+                return RecipeIngredientSchema(
+                    item=groups[0],  # ingredient name
+                    amount="to taste"
+                )
+    
+    # Fallback
+    return RecipeIngredientSchema(
+        item=ing_str,
+        amount=""
+    )
 
 
 @activity.defn
@@ -77,19 +190,27 @@ async def process_recipe_entry_local(csv_file_path: str, entry_number: int) -> D
                 'error': 'Entry not found'
             }
         
-        # Get the text content - try 'comment' field first, then 'text'
-        recipe_text = entry_data.get('comment') or entry_data.get('text') or ''
+        # Handle different CSV formats
+        # Stromberg format: has 'ingredients' and 'directions' as JSON arrays
+        # Reddit format: has 'comment' or 'text' as unstructured text
         
-        if not recipe_text:
-            return {
-                'success': False,
-                'entryNumber': entry_number,
-                'error': 'No recipe text found in entry'
-            }
-        
-        # Extract recipe data using local parsing
-        local_parser = LocalRecipeParser()
-        recipe_data = await local_parser.extract_recipe_data(recipe_text)
+        if 'ingredients' in entry_data and 'directions' in entry_data:
+            # Stromberg format - structured data
+            recipe_data = await _parse_structured_recipe(entry_data)
+        else:
+            # Reddit format - unstructured text
+            recipe_text = entry_data.get('comment') or entry_data.get('text') or ''
+            
+            if not recipe_text:
+                return {
+                    'success': False,
+                    'entryNumber': entry_number,
+                    'error': 'No recipe text found in entry'
+                }
+            
+            # Extract recipe data using local parsing
+            local_parser = LocalRecipeParser()
+            recipe_data = await local_parser.extract_recipe_data(recipe_text)
         
         # Override title with CSV title if available
         csv_title = entry_data.get('title', '').strip()
@@ -97,11 +218,14 @@ async def process_recipe_entry_local(csv_file_path: str, entry_number: int) -> D
             recipe_data.title = csv_title
         
         # Use the first paragraph as description if we don't have one
-        if not recipe_data.description and recipe_text:
-            # Extract first paragraph (before the Ingredients section)
-            first_para = recipe_text.split('\n\n')[0]
-            if len(first_para) < 500 and 'ingredient' not in first_para.lower():
-                recipe_data.description = first_para.strip()
+        # Only for Reddit format (unstructured text)
+        if 'ingredients' not in entry_data and not recipe_data.description:
+            recipe_text = entry_data.get('comment') or entry_data.get('text') or ''
+            if recipe_text:
+                # Extract first paragraph (before the Ingredients section)
+                first_para = recipe_text.split('\n\n')[0]
+                if len(first_para) < 500 and 'ingredient' not in first_para.lower():
+                    recipe_data.description = first_para.strip()
         
         # Extract CSV filename for subdirectory organization
         import os
