@@ -237,15 +237,53 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
             
             recipe_ingredients.append(recipe_ingredient)
         
+        # Parse time strings to minutes
+        def parse_time_to_minutes(time_str: Optional[str]) -> Optional[int]:
+            """Convert time string like '30 minutes' or '1 hour' to minutes."""
+            if not time_str:
+                return None
+            
+            time_str = time_str.lower().strip()
+            
+            # Extract numbers
+            import re
+            numbers = re.findall(r'(\d+(?:\.\d+)?)', time_str)
+            if not numbers:
+                return None
+            
+            value = float(numbers[0])
+            
+            # Check if it's hours
+            if 'hour' in time_str or 'hr' in time_str:
+                return int(value * 60)
+            # Otherwise assume minutes
+            else:
+                return int(value)
+        
+        prep_time = parse_time_to_minutes(recipe_schema.prepTime)
+        cook_time = parse_time_to_minutes(recipe_schema.cookTime)
+        total_time = None
+        if prep_time and cook_time:
+            total_time = prep_time + cook_time
+        elif prep_time:
+            total_time = prep_time
+        elif cook_time:
+            total_time = cook_time
+        
         # Create recipe (with truncation for database constraints)
         recipe = Recipe(
             title=recipe_schema.title[:500] if recipe_schema.title else "Untitled Recipe",
             description=recipe_schema.description[:1000] if recipe_schema.description else None,
             instructions=instructions,
             ingredients=recipe_ingredients,
-            prep_time_minutes=None,  # TODO: Parse time strings
-            cook_time_minutes=None,
-            servings=None
+            prep_time_minutes=prep_time,
+            cook_time_minutes=cook_time,
+            total_time_minutes=total_time,
+            servings=None,
+            difficulty=recipe_schema.difficulty,
+            cuisine_type=recipe_schema.cuisine,
+            meal_type=recipe_schema.mealType,
+            dietary_tags=recipe_schema.dietaryTags
         )
         
         # Check if recipe already exists

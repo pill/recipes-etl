@@ -78,10 +78,17 @@ class LocalRecipeParser:
         
         # Extract timing information
         prep_time = self._extract_prep_time(text)
+        cook_time = self._extract_cook_time(text)
         chill_time = self._extract_chill_time(text)
         
         # Extract pan size information
         pan_size = self._extract_pan_size(text)
+        
+        # Extract additional metadata
+        difficulty = self._extract_difficulty(text, title)
+        cuisine = self._extract_cuisine(text, title, ingredients)
+        meal_type = self._extract_meal_type(text, title, ingredients)
+        dietary_tags = self._extract_dietary_tags(text, title, ingredients)
         
         return RecipeSchema(
             title=title,
@@ -89,8 +96,13 @@ class LocalRecipeParser:
             ingredients=ingredients,
             instructions=instructions,
             prepTime=prep_time,
+            cookTime=cook_time,
             chillTime=chill_time,
-            panSize=pan_size
+            panSize=pan_size,
+            difficulty=difficulty,
+            cuisine=cuisine,
+            mealType=meal_type,
+            dietaryTags=dietary_tags
         )
     
     def _extract_title(self, lines: List[str], text: str) -> str:
@@ -231,6 +243,22 @@ class LocalRecipeParser:
         
         return None
     
+    def _extract_cook_time(self, text: str) -> Optional[str]:
+        """Extract cooking time from text."""
+        patterns = [
+            r'cook[ing]*\s+time:?\s*(\d+(?:\.\d+)?\s*(?:minute|hour|min|hr)s?)',
+            r'cooking:?\s*(\d+(?:\.\d+)?\s*(?:minute|hour|min|hr)s?)',
+            r'bake\s+(?:for\s+)?(\d+(?:\.\d+)?\s*(?:minute|hour|min|hr)s?)',
+            r'total\s+cook\s+time:?\s*(\d+(?:\.\d+)?\s*(?:minute|hour|min|hr)s?)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
+        return None
+    
     def _extract_chill_time(self, text: str) -> Optional[str]:
         """Extract chilling time from text."""
         patterns = [
@@ -260,6 +288,182 @@ class LocalRecipeParser:
                 return match.group(1).strip()
         
         return None
+    
+    def _extract_difficulty(self, text: str, title: str) -> Optional[str]:
+        """Extract difficulty level from text and title."""
+        # Check for explicit difficulty mentions
+        text_lower = text.lower()
+        title_lower = title.lower()
+        combined = f"{title_lower} {text_lower}"
+        
+        # Explicit difficulty mentions
+        if any(word in combined for word in ['beginner', 'simple', 'quick', 'easy']):
+            return 'easy'
+        if any(word in combined for word in ['intermediate', 'medium']):
+            return 'medium'
+        if any(word in combined for word in ['advanced', 'difficult', 'hard', 'complex', 'challenging']):
+            return 'hard'
+        
+        # Heuristic based on recipe complexity
+        # Count steps/ingredients as complexity indicators
+        ingredient_count = len(re.findall(r'(?:^|\n)\s*[-*•]', text))
+        step_count = len(re.findall(r'(?:^|\n)\s*\d+[.)]', text))
+        
+        # Check for advanced techniques
+        advanced_techniques = [
+            'sous vide', 'tempering', 'emulsify', 'caramelize', 'braise',
+            'confit', 'deglaze', 'flambe', 'reduce', 'blanch', 'score'
+        ]
+        has_advanced = any(tech in text_lower for tech in advanced_techniques)
+        
+        if has_advanced or ingredient_count > 15 or step_count > 10:
+            return 'hard'
+        elif ingredient_count > 8 or step_count > 5:
+            return 'medium'
+        elif ingredient_count > 0 or step_count > 0:
+            return 'easy'
+        
+        return None
+    
+    def _extract_cuisine(self, text: str, title: str, ingredients: List) -> Optional[str]:
+        """Extract cuisine type from text, title, and ingredients."""
+        text_lower = text.lower()
+        title_lower = title.lower()
+        combined = f"{title_lower} {text_lower}"
+        
+        # Cuisine keywords mapping
+        cuisine_keywords = {
+            'Italian': ['italian', 'pasta', 'risotto', 'parmigiano', 'parmesan', 'mozzarella', 
+                       'basil', 'marinara', 'carbonara', 'lasagna', 'tiramisu', 'bruschetta'],
+            'Mexican': ['mexican', 'taco', 'burrito', 'enchilada', 'salsa', 'guacamole', 
+                       'tortilla', 'cilantro', 'jalapeño', 'chipotle', 'fajita', 'quesadilla'],
+            'Chinese': ['chinese', 'stir fry', 'wok', 'soy sauce', 'ginger', 'bok choy',
+                       'szechuan', 'dim sum', 'dumpling', 'lo mein', 'chow mein'],
+            'Japanese': ['japanese', 'sushi', 'ramen', 'miso', 'teriyaki', 'tempura',
+                        'wasabi', 'udon', 'soba', 'sake', 'mirin', 'nori'],
+            'Thai': ['thai', 'pad thai', 'curry paste', 'lemongrass', 'fish sauce',
+                    'coconut milk', 'basil thai', 'galangal', 'kaffir lime'],
+            'Indian': ['indian', 'curry', 'naan', 'tandoori', 'masala', 'tikka',
+                      'cumin', 'turmeric', 'garam masala', 'cardamom', 'biryani'],
+            'French': ['french', 'béarnaise', 'hollandaise', 'croissant', 'baguette',
+                      'coq au vin', 'ratatouille', 'crème', 'bourguignon', 'soufflé'],
+            'Greek': ['greek', 'feta', 'tzatziki', 'gyro', 'moussaka', 'baklava',
+                     'oregano', 'kalamata', 'spanakopita', 'souvlaki'],
+            'Korean': ['korean', 'kimchi', 'bibimbap', 'bulgogi', 'gochujang',
+                      'ssamjang', 'korean bbq', 'banchan'],
+            'Vietnamese': ['vietnamese', 'pho', 'banh mi', 'spring roll', 'nuoc mam'],
+            'Spanish': ['spanish', 'paella', 'tapas', 'chorizo', 'gazpacho', 'sangria'],
+            'American': ['bbq', 'barbecue', 'burger', 'hotdog', 'mac and cheese', 
+                        'southern', 'cajun', 'creole', 'fried chicken'],
+            'Middle Eastern': ['middle eastern', 'hummus', 'falafel', 'tahini', 'shawarma',
+                             'pita', 'chickpea', 'couscous', 'kebab', 'baba ganoush'],
+            'Mediterranean': ['mediterranean', 'olive oil', 'feta', 'olives', 'lemon'],
+        }
+        
+        # Check for cuisine keywords
+        for cuisine, keywords in cuisine_keywords.items():
+            matches = sum(1 for keyword in keywords if keyword in combined)
+            if matches >= 2:  # Require at least 2 keyword matches
+                return cuisine
+            elif matches == 1 and any(keyword in title_lower for keyword in keywords):
+                # Single match in title is enough
+                return cuisine
+        
+        return None
+    
+    def _extract_meal_type(self, text: str, title: str, ingredients: List) -> Optional[str]:
+        """Extract meal type from text, title, and ingredients."""
+        text_lower = text.lower()
+        title_lower = title.lower()
+        combined = f"{title_lower} {text_lower}"
+        
+        # Meal type keywords
+        meal_keywords = {
+            'breakfast': ['breakfast', 'pancake', 'waffle', 'omelette', 'omelet', 'french toast',
+                         'cereal', 'granola', 'muffin', 'bagel', 'croissant', 'eggs benedict',
+                         'breakfast burrito', 'brunch', 'morning'],
+            'lunch': ['lunch', 'sandwich', 'wrap', 'salad', 'soup and salad', 'midday'],
+            'dinner': ['dinner', 'supper', 'main course', 'entrée', 'entree', 'evening meal'],
+            'dessert': ['dessert', 'cake', 'cookie', 'brownie', 'pie', 'tart', 'pudding',
+                       'ice cream', 'sorbet', 'mousse', 'truffle', 'candy', 'sweet', 'frosting',
+                       'cheesecake', 'cupcake', 'macaron', 'tiramisu', 'parfait', 'fudge'],
+            'snack': ['snack', 'appetizer', 'finger food', 'dip', 'chips', 'popcorn',
+                     'energy ball', 'trail mix', 'tapas', 'mezze'],
+        }
+        
+        # Check for explicit meal type mentions
+        for meal_type, keywords in meal_keywords.items():
+            matches = sum(1 for keyword in keywords if keyword in combined)
+            if matches >= 1:
+                # Prioritize title matches
+                if any(keyword in title_lower for keyword in keywords):
+                    return meal_type
+                # Otherwise use first match
+                return meal_type
+        
+        # Heuristic: desserts usually have sugar/chocolate
+        dessert_ingredients = ['sugar', 'chocolate', 'cocoa', 'honey', 'maple syrup', 'vanilla extract']
+        if any(ing in text_lower for ing in dessert_ingredients):
+            # Check if it's likely a dessert (not just a sweet sauce for dinner)
+            if not any(savory in combined for savory in ['chicken', 'beef', 'pork', 'fish', 'meat', 'pasta']):
+                return 'dessert'
+        
+        return None
+    
+    def _extract_dietary_tags(self, text: str, title: str, ingredients: List) -> Optional[List[str]]:
+        """Extract dietary tags from text, title, and ingredients."""
+        text_lower = text.lower()
+        title_lower = title.lower()
+        combined = f"{title_lower} {text_lower}"
+        
+        tags = []
+        
+        # Check for explicit dietary mentions
+        if any(word in combined for word in ['vegetarian', 'veggie']):
+            tags.append('vegetarian')
+        if any(word in combined for word in ['vegan', 'plant-based', 'plant based']):
+            tags.append('vegan')
+        if any(word in combined for word in ['gluten-free', 'gluten free', 'gf ']):
+            tags.append('gluten-free')
+        if any(word in combined for word in ['dairy-free', 'dairy free', 'lactose-free']):
+            tags.append('dairy-free')
+        if any(word in combined for word in ['keto', 'ketogenic', 'low-carb', 'low carb']):
+            tags.append('keto')
+        if any(word in combined for word in ['paleo', 'paleolithic']):
+            tags.append('paleo')
+        if any(word in combined for word in ['whole30', 'whole 30']):
+            tags.append('whole30')
+        if any(word in combined for word in ['low-fat', 'low fat', 'fat-free']):
+            tags.append('low-fat')
+        if any(word in combined for word in ['sugar-free', 'sugar free', 'no sugar']):
+            tags.append('sugar-free')
+        if any(word in combined for word in ['nut-free', 'nut free']):
+            tags.append('nut-free')
+        if any(word in combined for word in ['soy-free', 'soy free']):
+            tags.append('soy-free')
+        if any(word in combined for word in ['kosher']):
+            tags.append('kosher')
+        if any(word in combined for word in ['halal']):
+            tags.append('halal')
+        
+        # Heuristic: check for animal products to determine vegetarian/vegan
+        if not tags:
+            animal_products = ['chicken', 'beef', 'pork', 'fish', 'meat', 'bacon', 'sausage',
+                             'turkey', 'lamb', 'duck', 'seafood', 'shrimp', 'salmon']
+            has_meat = any(product in text_lower for product in animal_products)
+            
+            dairy_products = ['milk', 'cheese', 'butter', 'cream', 'yogurt', 'whey']
+            has_dairy = any(product in text_lower for product in dairy_products)
+            
+            eggs_present = 'egg' in text_lower
+            
+            if not has_meat and not has_dairy and not eggs_present:
+                tags.append('vegan')
+                tags.append('vegetarian')
+            elif not has_meat:
+                tags.append('vegetarian')
+        
+        return tags if tags else None
     
     def _is_ingredient_line(self, line: str) -> bool:
         """Check if a line looks like an ingredient."""

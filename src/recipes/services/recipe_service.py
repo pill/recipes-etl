@@ -63,16 +63,16 @@ class RecipeService:
                         except Exception as ing_error:
                             print(f"Warning: Failed to insert some ingredients for recipe '{recipe.title[:50]}': {str(ing_error)}")
                             # Continue anyway - recipe is created, just missing some ingredients
-                    
-                    # Fetch the complete recipe with ingredients
-                    created_recipe = await RecipeService.get_by_id(recipe_id)
-                    if not created_recipe:
-                        print(f"Warning: Recipe {recipe_id} created but couldn't fetch it back")
-                        # Return a minimal recipe object with the ID
-                        recipe.id = recipe_id
-                        return recipe
-                    
-                    return created_recipe
+            
+            # Transaction is now committed - fetch the complete recipe with the same connection pool
+            created_recipe = await RecipeService.get_by_id(recipe_id)
+            if not created_recipe:
+                print(f"Warning: Recipe {recipe_id} created but couldn't fetch it back")
+                # Return a minimal recipe object with the ID
+                recipe.id = recipe_id
+                return recipe
+            
+            return created_recipe
         except Exception as e:
             print(f"Error creating recipe '{recipe.title[:50] if recipe.title else 'No title'}': {str(e)}")
             return None

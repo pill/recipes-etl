@@ -174,8 +174,26 @@ Return only the JSON object, no additional text."""
 Focus on:
 - Accurate ingredient names and amounts
 - Clear, step-by-step instructions with descriptive titles
-- Proper timing information (prep time, chill time, etc.)
+- Proper timing information (prep time, cook time, chill time, etc.)
 - Equipment requirements (pan sizes, etc.)
+- Recipe metadata (difficulty, cuisine type, meal type, dietary tags)
+
+For difficulty:
+- 'easy' for simple recipes with few steps
+- 'medium' for recipes requiring some skill or multiple steps
+- 'hard' for complex recipes with advanced techniques
+
+For cuisine:
+- Identify the cuisine type (e.g., 'Italian', 'Mexican', 'Chinese', 'Thai', 'Indian', 'French', 'American', etc.)
+- Use the most specific cuisine type when possible
+
+For mealType:
+- Choose from: 'breakfast', 'lunch', 'dinner', 'snack', 'dessert'
+- Base on when the dish would typically be served
+
+For dietaryTags:
+- Include relevant tags: 'vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo', etc.
+- Only include tags that clearly apply based on ingredients
 
 Extract all available information and structure it according to the provided schema."""
         
