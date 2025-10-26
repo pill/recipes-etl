@@ -31,7 +31,7 @@ REDDIT_USERNAME = os.getenv('REDDIT_USERNAME')
 REDDIT_PASSWORD = os.getenv('REDDIT_PASSWORD')
 
 # ' python:filkus-recipe-etl:1.2.0 (by u/filku)"
-REDDIT_USER_AGENT = f"python:{os.getenv('REDDIT_USER_AGENT')}:{__version__} (by u/{REDDIT_USERNAME})"
+REDDIT_USER_AGENT = f"python:{os.getenv('REDDIT_APP_NAME')}:{__version__} (by u/{REDDIT_USERNAME})"
 
 class RedditService:
     def __init__(self):
