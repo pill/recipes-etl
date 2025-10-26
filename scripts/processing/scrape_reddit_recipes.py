@@ -23,6 +23,13 @@ sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 # Load environment variables
 load_dotenv()
 
+# Optional Kafka support
+try:
+    from recipes.services.kafka_service import get_kafka_service
+    KAFKA_AVAILABLE = True
+except ImportError:
+    KAFKA_AVAILABLE = False
+
 
 class RedditRecipeScraper:
     """Scrape recipes from Reddit subreddits."""
@@ -31,7 +38,8 @@ class RedditRecipeScraper:
         self,
         subreddit_name: str = "recipes",
         output_file: Optional[str] = None,
-        check_interval: int = 300  # 5 minutes default
+        check_interval: int = 300,  # 5 minutes default
+        use_kafka: bool = False
     ):
         """
         Initialize the scraper.
@@ -40,19 +48,32 @@ class RedditRecipeScraper:
             subreddit_name: Name of the subreddit to scrape (default: "recipes")
             output_file: Path to CSV output file (default: data/raw/Reddit_Recipes_New.csv)
             check_interval: Seconds between checks (default: 300)
+            use_kafka: Publish to Kafka instead of CSV (default: False)
         """
         self.subreddit_name = subreddit_name
         self.check_interval = check_interval
+        self.use_kafka = use_kafka
         
-        # Setup output file
-        if output_file is None:
-            output_file = PROJECT_ROOT / "data" / "raw" / f"Reddit_{subreddit_name}_scraped.csv"
-        self.output_file = Path(output_file)
-        self.output_file.parent.mkdir(parents=True, exist_ok=True)
+        # Setup Kafka if enabled
+        if use_kafka:
+            if not KAFKA_AVAILABLE:
+                raise ImportError("Kafka support requires kafka-python. Install with: pip install kafka-python")
+            self.kafka_service = get_kafka_service()
+            print(f"✅ Kafka enabled - will publish to topic: {self.kafka_service.topic}")
         
-        # Track processed post IDs to avoid duplicates
-        self.processed_ids: Set[str] = set()
-        self._load_processed_ids()
+        # Setup output file (only if not using Kafka)
+        if not use_kafka:
+            if output_file is None:
+                output_file = PROJECT_ROOT / "data" / "raw" / f"Reddit_{subreddit_name}_scraped.csv"
+            self.output_file = Path(output_file)
+            self.output_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Track processed post IDs to avoid duplicates (CSV mode only)
+            self.processed_ids: Set[str] = set()
+            self._load_processed_ids()
+        else:
+            # Kafka mode - no CSV, no processed_ids tracking
+            self.processed_ids: Set[str] = set()  # Empty set for Kafka mode
         
         # Initialize Reddit client
         self.reddit = asyncpraw.Reddit(
@@ -167,36 +188,57 @@ class RedditRecipeScraper:
         try:
             subreddit = await self.reddit.subreddit(self.subreddit_name)
             
-            # Check if CSV exists, if not create with headers
-            file_exists = self.output_file.exists()
-            
-            with open(self.output_file, 'a', newline='', encoding='utf-8') as csvfile:
-                fieldnames = ['date', 'num_comments', 'title', 'user', 'comment', 'n_char']
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
-                
-                # Write header if new file
-                if not file_exists:
-                    writer.writeheader()
-                    print(f"📝 Created new CSV file: {self.output_file}")
-                
-                # Iterate through new posts
+            # Kafka mode - publish to Kafka
+            if self.use_kafka:
                 async for submission in subreddit.new(limit=limit):
                     recipe_data = await self.extract_recipe_from_submission(submission)
                     
                     if recipe_data:
-                        # Write to CSV
-                        writer.writerow(recipe_data)
-                        csvfile.flush()  # Ensure data is written immediately
+                        # Publish to Kafka with user as key for partitioning
+                        success = self.kafka_service.publish_recipe(
+                            recipe_data,
+                            key=recipe_data['user']
+                        )
                         
-                        # Add to processed set
-                        unique_id = f"{recipe_data['title']}_{recipe_data['user']}"
-                        self.processed_ids.add(unique_id)
+                        if success:
+                            new_recipes += 1
+                            print(f"📡 Published: '{recipe_data['title'][:60]}...' by u/{recipe_data['user']}")
+                        else:
+                            print(f"⚠️  Failed to publish: '{recipe_data['title'][:60]}...'")
+            
+            # CSV mode - save to file
+            else:
+                # Check if CSV exists, if not create with headers
+                file_exists = self.output_file.exists()
+                
+                with open(self.output_file, 'a', newline='', encoding='utf-8') as csvfile:
+                    fieldnames = ['date', 'num_comments', 'title', 'user', 'comment', 'n_char']
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
+                    
+                    # Write header if new file
+                    if not file_exists:
+                        writer.writeheader()
+                        print(f"📝 Created new CSV file: {self.output_file}")
+                    
+                    # Iterate through new posts
+                    async for submission in subreddit.new(limit=limit):
+                        recipe_data = await self.extract_recipe_from_submission(submission)
                         
-                        new_recipes += 1
-                        print(f"✅ Saved: '{recipe_data['title'][:60]}...' by u/{recipe_data['user']}")
+                        if recipe_data:
+                            # Write to CSV
+                            writer.writerow(recipe_data)
+                            csvfile.flush()  # Ensure data is written immediately
+                            
+                            # Add to processed set
+                            unique_id = f"{recipe_data['title']}_{recipe_data['user']}"
+                            self.processed_ids.add(unique_id)
+                            
+                            new_recipes += 1
+                            print(f"✅ Saved: '{recipe_data['title'][:60]}...' by u/{recipe_data['user']}")
             
             if new_recipes > 0:
-                print(f"\n🎉 Found and saved {new_recipes} new recipe(s)")
+                mode = "published" if self.use_kafka else "saved"
+                print(f"\n🎉 Found and {mode} {new_recipes} new recipe(s)")
             else:
                 print(f"ℹ️  No new recipes found")
             
@@ -218,6 +260,8 @@ class RedditRecipeScraper:
             
         finally:
             await self.reddit.close()
+            # Don't close Kafka service here - it might be reused by other activities
+            # The service will be closed when the activity completes
     
     async def run_continuous(self, limit: int = 25):
         """Run the scraper continuously on a schedule."""
@@ -225,7 +269,10 @@ class RedditRecipeScraper:
             me = await self.reddit.user.me()
             print(f"✅ Logged in as: u/{me}")
             print(f"🔄 Monitoring r/{self.subreddit_name} every {self.check_interval} seconds")
-            print(f"💾 Saving to: {self.output_file}")
+            if self.use_kafka:
+                print(f"📡 Publishing to: Kafka topic '{self.kafka_service.topic}'")
+            else:
+                print(f"💾 Saving to: {self.output_file}")
             print(f"\n Press Ctrl+C to stop\n")
             
             while True:
@@ -240,6 +287,9 @@ class RedditRecipeScraper:
         finally:
             await self.reddit.close()
             print("✅ Closed Reddit connection")
+            # Close Kafka producer when completely done (continuous mode)
+            if self.use_kafka:
+                self.kafka_service.close()
 
 
 async def main():
@@ -275,6 +325,11 @@ async def main():
         action='store_true',
         help='Run continuously (default: run once and exit)'
     )
+    parser.add_argument(
+        '--use-kafka',
+        action='store_true',
+        help='Publish to Kafka instead of CSV (default: save to CSV)'
+    )
     
     args = parser.parse_args()
     
@@ -282,7 +337,8 @@ async def main():
     scraper = RedditRecipeScraper(
         subreddit_name=args.subreddit,
         output_file=args.output,
-        check_interval=args.interval
+        check_interval=args.interval,
+        use_kafka=args.use_kafka
     )
     
     # Run

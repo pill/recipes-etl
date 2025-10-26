@@ -35,10 +35,10 @@ class CSVParser:
         return 'utf-8'
     
     async def get_entry(self, csv_file_path: str, entry_number: int) -> Optional[Dict[str, Any]]:
-        """Get a specific entry using streaming (memory efficient).
+        """Get a specific entry properly handling multi-line CSV fields.
         
-        Streams through file line-by-line instead of loading entire file into memory.
-        This is crucial for large files like Stromberg (2.2GB).
+        Note: For files with multi-line fields (like Reddit comments), we need to use
+        proper CSV parsing that handles quoted fields spanning multiple lines.
         """
         if not os.path.exists(csv_file_path):
             raise FileNotFoundError(f"CSV file not found: {csv_file_path}")
@@ -46,28 +46,20 @@ class CSVParser:
         try:
             encoding = await self._detect_encoding(csv_file_path)
             
-            # Stream through file line by line
+            # Read entire file content (required for proper CSV parsing of multi-line fields)
             async with aiofiles.open(csv_file_path, 'r', encoding=encoding, errors='replace') as file:
-                # Read header
-                header_line = await file.readline()
-                if not header_line:
-                    return None
-                
-                # Parse header
-                reader = csv.reader([header_line])
-                headers = next(reader)
-                
-                # Stream to the desired entry
-                current_row = 0
-                async for line in file:
-                    current_row += 1
-                    if current_row == entry_number:
-                        # Parse only this row
-                        reader = csv.reader([line])
-                        values = next(reader)
-                        return dict(zip(headers, values))
-                
-                return None  # Entry not found
+                content = await file.read()
+            
+            # Use csv.DictReader to properly handle multi-line quoted fields
+            from io import StringIO
+            csv_reader = csv.DictReader(StringIO(content))
+            
+            # Iterate to the desired entry
+            for current_row, row in enumerate(csv_reader, 1):
+                if current_row == entry_number:
+                    return dict(row)
+            
+            return None  # Entry not found
                 
         except Exception as e:
             raise Exception(f"Error parsing CSV file: {str(e)}")
@@ -78,7 +70,7 @@ class CSVParser:
         start_entry: int, 
         end_entry: int
     ) -> list[Dict[str, Any]]:
-        """Get a batch of entries efficiently (memory optimized).
+        """Get a batch of entries properly handling multi-line CSV fields.
         
         Args:
             csv_file_path: Path to CSV file
@@ -90,32 +82,26 @@ class CSVParser:
         
         try:
             encoding = await self._detect_encoding(csv_file_path)
-            results = []
             
+            # Read entire file content (required for proper CSV parsing of multi-line fields)
             async with aiofiles.open(csv_file_path, 'r', encoding=encoding, errors='replace') as file:
-                # Read header
-                header_line = await file.readline()
-                if not header_line:
-                    return []
-                
-                reader = csv.reader([header_line])
-                headers = next(reader)
-                
-                # Stream through file
-                current_row = 0
-                async for line in file:
-                    current_row += 1
+                content = await file.read()
+            
+            # Use csv.DictReader to properly handle multi-line quoted fields
+            from io import StringIO
+            csv_reader = csv.DictReader(StringIO(content))
+            
+            # Collect entries in the specified range
+            results = []
+            for current_row, row in enumerate(csv_reader, 1):
+                if current_row < start_entry:
+                    continue
+                if current_row > end_entry:
+                    break
                     
-                    if current_row < start_entry:
-                        continue
-                    if current_row > end_entry:
-                        break
-                    
-                    reader = csv.reader([line])
-                    values = next(reader)
-                    results.append(dict(zip(headers, values)))
+                results.append(dict(row))
                 
-                return results
+            return results
                 
         except Exception as e:
             raise Exception(f"Error parsing CSV batch: {str(e)}")

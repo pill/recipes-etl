@@ -230,6 +230,63 @@ python scripts/processing/process_and_load.py
 
 **See:** [REDDIT_SCRAPER_GUIDE.md](./docs/REDDIT_SCRAPER_GUIDE.md) for complete documentation
 
+### ⏰ Schedule with Temporal (Recommended)
+
+Run the scraper automatically every 5 minutes using Temporal Schedules - better than cron:
+
+```bash
+# 1. Start services and worker
+./COMMANDS.sh start
+./COMMANDS.sh worker
+
+# 2. Create schedule (runs every 5 minutes)
+./COMMANDS.sh schedule create --interval 5
+
+# 3. Monitor in Temporal UI
+open http://localhost:8081/schedules
+
+# Manage schedule
+./COMMANDS.sh schedule pause      # Pause scraping
+./COMMANDS.sh schedule unpause    # Resume scraping
+./COMMANDS.sh schedule trigger    # Run immediately
+./COMMANDS.sh schedule describe   # View status
+./COMMANDS.sh schedule delete     # Remove schedule
+```
+
+**Benefits:**
+- ✅ Reliable execution with retry logic
+- ✅ Full observability in Temporal UI
+- ✅ Pause/resume without code changes
+- ✅ Backfill missed runs
+- ✅ No external cron dependencies
+
+**See:** [TEMPORAL_SCHEDULES.md](./docs/TEMPORAL_SCHEDULES.md) for complete guide
+
+### 🚀 Stream Recipes with Kafka (Event-Driven)
+
+For scalable, event-driven recipe collection, use Kafka:
+
+```bash
+# 1. Start Kafka services
+docker-compose -f docker-compose.python.yml up -d zookeeper kafka kafka-ui
+
+# 2. Scrape and publish to Kafka (producer)
+./COMMANDS.sh scrape-kafka --continuous --interval 300
+
+# 3. Consume and process events (consumer)
+./COMMANDS.sh kafka-consumer --save-csv
+
+# Monitor at: http://localhost:8082 (Kafka UI)
+```
+
+**Benefits:**
+- ⚡ Decoupled scraping and processing
+- 📈 Scalable with multiple consumers
+- 🔄 Reliable message delivery
+- 🔁 Replay capability for reprocessing
+
+**See:** [KAFKA_GUIDE.md](./docs/KAFKA_GUIDE.md) for complete documentation
+
 ### Search with Elasticsearch
 
 Enable full-text search and recommendations:

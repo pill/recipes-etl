@@ -82,6 +82,18 @@ case "$1" in
         shift
         cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/processing/scrape_reddit_recipes.py --continuous "$@"
         ;;
+    scrape-kafka)
+        shift
+        cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/processing/scrape_reddit_recipes.py --use-kafka "$@"
+        ;;
+    kafka-consumer)
+        shift
+        cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/processing/kafka_consumer.py "$@"
+        ;;
+    schedule)
+        shift
+        cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/runners/run_reddit_schedule.py "$@"
+        ;;
     help|"")
         echo "╔══════════════════════════════════════════════════╗"
         echo "║         Recipe ETL Command Shortcuts            ║"
@@ -109,7 +121,17 @@ case "$1" in
         echo "  ./COMMANDS.sh scrape [--subreddit recipes] [--limit 25]"
         echo "                              - Scrape Reddit once and save to CSV"
         echo "  ./COMMANDS.sh scrape-continuous [--interval 300]"
-        echo "                              - Monitor Reddit continuously"
+        echo "                              - Monitor Reddit continuously (CSV)"
+        echo "  ./COMMANDS.sh scrape-kafka [--continuous] [--limit 25]"
+        echo "                              - Scrape and publish to Kafka"
+        echo "  ./COMMANDS.sh kafka-consumer [--save-csv] [--no-db]"
+        echo "                              - Consume recipe events from Kafka"
+        echo ""
+        echo "⏰ Temporal Schedules:"
+        echo "  ./COMMANDS.sh schedule create [--interval 5]"
+        echo "                              - Create schedule (every 5 min default)"
+        echo "  ./COMMANDS.sh schedule pause|unpause|trigger|describe|delete"
+        echo "                              - Manage the schedule"
         echo ""
         echo "🔍 Search & Query:"
         echo "  ./COMMANDS.sh search <term> - Search recipes"
@@ -118,11 +140,12 @@ case "$1" in
         echo "  ./COMMANDS.sh cli <command> - Run any CLI command"
         echo ""
         echo "💡 Examples:"
-        echo "  ./COMMANDS.sh start"
-        echo "  ./COMMANDS.sh worker"
-        echo "  ./COMMANDS.sh scrape --subreddit recipes --limit 50"
-        echo "  ./COMMANDS.sh scrape-continuous --interval 600"
-        echo "  ./COMMANDS.sh search 'chicken pasta'"
+        echo "  ./COMMANDS.sh start                      # Start all services"
+        echo "  ./COMMANDS.sh worker                     # Start Temporal worker"
+        echo "  ./COMMANDS.sh schedule create --interval 5  # Schedule every 5 min"
+        echo "  ./COMMANDS.sh schedule describe          # Check schedule status"
+        echo "  ./COMMANDS.sh kafka-consumer --save-csv  # Consume from Kafka"
+        echo "  ./COMMANDS.sh search 'chicken pasta'     # Search recipes"
         echo ""
         echo "📚 For detailed documentation, see: docs/COMMANDS.md"
         ;;

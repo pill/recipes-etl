@@ -13,11 +13,13 @@ from .workflows.workflows import (
     LoadRecipesToDbWorkflow,
     LoadRecipesToDbParallelWorkflow
 )
+from .workflows.reddit_scraper_workflow import RedditScraperWorkflow
 from .workflows.activities import (
     process_recipe_entry,
     process_recipe_entry_local,
     load_json_to_db
 )
+from .workflows.reddit_activities import scrape_reddit_recipes_activity
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,15 +38,26 @@ async def main():
     sandbox_restrictions = SandboxRestrictions.default.with_passthrough_modules(
         "anthropic",
         "httpx",
+        "http",
+        "http.client",
         "urllib",
         "urllib.request",
         "urllib.parse",
         "urllib.error",
+        "urllib3",
         "asyncpg",
+        "asyncpraw",
+        "asyncprawcore",
         "pydantic",
         "pandas",
         "json",
-        "aiofiles"
+        "aiofiles",
+        "kafka",
+        "kafka.errors",
+        "dotenv",
+        "pathlib",
+        "csv",
+        "hashlib"
     )
     
     # Create worker with sandbox configuration
@@ -56,12 +69,14 @@ async def main():
             ProcessRecipeBatchLocalWorkflow,
             ProcessRecipeBatchLocalParallelWorkflow,
             LoadRecipesToDbWorkflow,
-            LoadRecipesToDbParallelWorkflow
+            LoadRecipesToDbParallelWorkflow,
+            RedditScraperWorkflow
         ],
         activities=[
             process_recipe_entry,
             process_recipe_entry_local,
-            load_json_to_db
+            load_json_to_db,
+            scrape_reddit_recipes_activity
         ],
         workflow_runner=SandboxedWorkflowRunner(restrictions=sandbox_restrictions)
     )

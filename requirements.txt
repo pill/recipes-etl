@@ -68,3 +68,4 @@ update-checker==0.18.0
 urllib3==2.5.0
 virtualenv==20.35.3
 yarl==1.22.0
+kafka-python>=2.0.2
