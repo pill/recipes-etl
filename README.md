@@ -399,13 +399,26 @@ mypy src/
 - Large dataset support (2M recipes)
 
 ### v1.1 (TypeScript)
-- LLM-based transform scripts
+- LLM generated transform scripts
 - Reduced API calls
 
 ### v1.0 (TypeScript)
 - Initial implementation
 - Direct LLM calls
 - Basic data processing
+
+## Future Ideas
+- data firehose from Reddit data
+
+- categorization
+    - ML for categorization
+
+- agent for ?
+    - cleaning data?
+
+
+
+
 
 ## 🆘 Troubleshooting
 

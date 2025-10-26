@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Script to load all JSON files from data/stage into the database."""
+"""Script to load JSON files from a specific folder into the database."""
 
 import asyncio
 import glob
@@ -14,18 +14,35 @@ from recipes.client import run_load_recipes_workflow
 
 
 async def main():
-    """Load all JSON files into the database."""
-    # Get all JSON files from stage directory and subdirectories
-    json_files = sorted(glob.glob('data/stage/**/*.json', recursive=True))
+    """Load JSON files from specified folder into the database."""
+    if len(sys.argv) < 2:
+        print("Usage: python3 scripts/processing/load_folder_to_db.py <folder_path>")
+        print()
+        print("Examples:")
+        print("  python3 scripts/processing/load_folder_to_db.py data/stage/stromberg_data")
+        print("  python3 scripts/processing/load_folder_to_db.py data/stage/2025-10-14/stromberg_data")
+        print("  python3 scripts/processing/load_folder_to_db.py data/stage/Reddit_Recipes")
+        sys.exit(1)
     
-    # If no files in subdirectories, check root stage directory
+    folder_path = sys.argv[1]
+    
+    # Validate folder exists
+    if not Path(folder_path).exists():
+        print(f"❌ Folder not found: {folder_path}")
+        sys.exit(1)
+    
+    if not Path(folder_path).is_dir():
+        print(f"❌ Path is not a directory: {folder_path}")
+        sys.exit(1)
+    
+    # Get all JSON files from specified folder and subdirectories
+    json_files = sorted(glob.glob(f'{folder_path}/**/*.json', recursive=True))
+    
     if not json_files:
-        json_files = sorted(glob.glob('data/stage/*.json'))
+        print(f"❌ No JSON files found in {folder_path}")
+        sys.exit(1)
     
-    if not json_files:
-        print("❌ No JSON files found in data/stage/")
-        return
-    
+    print(f"📂 Loading from: {folder_path}")
     print(f"📊 Found {len(json_files)} JSON files to load")
     
     # Split into chunks to avoid Temporal payload size limits
@@ -51,7 +68,7 @@ async def main():
             result = await run_load_recipes_workflow(
                 json_file_paths=chunk,
                 parallel=True,
-                batch_size=20,
+                batch_size=20,  # Moderate batch size
                 delay_between_batches_ms=200  # Pause between batches
             )
             

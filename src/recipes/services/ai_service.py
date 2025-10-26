@@ -184,8 +184,10 @@ For difficulty:
 - 'hard' for complex recipes with advanced techniques
 
 For cuisine:
-- Identify the cuisine type (e.g., 'Italian', 'Mexican', 'Chinese', 'Thai', 'Indian', 'French', 'American', etc.)
+- Identify the cuisine type (e.g., 'Italian', 'Mexican', 'Chinese', 'Thai', 'Indian', 'French', 'Korean', 'American', etc.)
+- If the cuisine name appears in the title (e.g., "Korean Beef Bowl"), use that cuisine type
 - Use the most specific cuisine type when possible
+- Consider ingredients as secondary signals (e.g., gochujang suggests Korean, fish sauce suggests Thai)
 
 For mealType:
 - Choose from: 'breakfast', 'lunch', 'dinner', 'snack', 'dessert'

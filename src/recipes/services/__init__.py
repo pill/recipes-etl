@@ -3,10 +3,12 @@
 from .ai_service import AIService, get_ai_service
 from .recipe_service import RecipeService
 from .ingredient_service import IngredientService
+from .reddit_service import RedditService
 
 __all__ = [
     'AIService',
     'get_ai_service', 
     'RecipeService',
-    'IngredientService'
+    'IngredientService',
+    'RedditService'
 ]

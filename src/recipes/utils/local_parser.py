@@ -350,7 +350,7 @@ class LocalRecipeParser:
             'Greek': ['greek', 'feta', 'tzatziki', 'gyro', 'moussaka', 'baklava',
                      'oregano', 'kalamata', 'spanakopita', 'souvlaki'],
             'Korean': ['korean', 'kimchi', 'bibimbap', 'bulgogi', 'gochujang',
-                      'ssamjang', 'korean bbq', 'banchan'],
+                      'ssamjang', 'korean bbq', 'banchan', 'gochugaru', 'soju'],
             'Vietnamese': ['vietnamese', 'pho', 'banh mi', 'spring roll', 'nuoc mam'],
             'Spanish': ['spanish', 'paella', 'tapas', 'chorizo', 'gazpacho', 'sangria'],
             'American': ['bbq', 'barbecue', 'burger', 'hotdog', 'mac and cheese', 
@@ -360,7 +360,14 @@ class LocalRecipeParser:
             'Mediterranean': ['mediterranean', 'olive oil', 'feta', 'olives', 'lemon'],
         }
         
-        # Check for cuisine keywords
+        # Priority 1: Check if cuisine name itself is in the title (strongest signal)
+        # e.g., "Korean Beef Bowl" -> Korean cuisine
+        for cuisine, keywords in cuisine_keywords.items():
+            cuisine_name = cuisine.lower()
+            if cuisine_name in title_lower:
+                return cuisine
+        
+        # Priority 2: Check for multiple keyword matches or single keyword in title
         for cuisine, keywords in cuisine_keywords.items():
             matches = sum(1 for keyword in keywords if keyword in combined)
             if matches >= 2:  # Require at least 2 keyword matches
@@ -368,6 +375,13 @@ class LocalRecipeParser:
             elif matches == 1 and any(keyword in title_lower for keyword in keywords):
                 # Single match in title is enough
                 return cuisine
+        
+        # TODO: Future enhancement - Ingredient-based cuisine detection
+        # Analyze ingredient combinations to infer cuisine:
+        # - Korean: gochujang + soy sauce + sesame
+        # - Italian: olive oil + tomato + basil
+        # - Thai: fish sauce + lime + coconut milk
+        # - etc.
         
         return None
     
