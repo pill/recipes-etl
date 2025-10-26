@@ -74,6 +74,14 @@ case "$1" in
         shift
         cd "$PROJECT_ROOT" && source activate.sh && python -m recipes.cli "$@"
         ;;
+    scrape)
+        shift
+        cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/processing/scrape_reddit_recipes.py "$@"
+        ;;
+    scrape-continuous)
+        shift
+        cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/processing/scrape_reddit_recipes.py --continuous "$@"
+        ;;
     help|"")
         echo "╔══════════════════════════════════════════════════╗"
         echo "║         Recipe ETL Command Shortcuts            ║"
@@ -97,6 +105,12 @@ case "$1" in
         echo "  ./COMMANDS.sh load          - Load recipes to database"
         echo "  ./COMMANDS.sh process <args> - Process and load recipes"
         echo ""
+        echo "📡 Reddit Scraping:"
+        echo "  ./COMMANDS.sh scrape [--subreddit recipes] [--limit 25]"
+        echo "                              - Scrape Reddit once and save to CSV"
+        echo "  ./COMMANDS.sh scrape-continuous [--interval 300]"
+        echo "                              - Monitor Reddit continuously"
+        echo ""
         echo "🔍 Search & Query:"
         echo "  ./COMMANDS.sh search <term> - Search recipes"
         echo "  ./COMMANDS.sh list          - List recent recipes"
@@ -106,7 +120,8 @@ case "$1" in
         echo "💡 Examples:"
         echo "  ./COMMANDS.sh start"
         echo "  ./COMMANDS.sh worker"
-        echo "  ./COMMANDS.sh client batch-parallel data/raw/recipes.csv 1 100 20"
+        echo "  ./COMMANDS.sh scrape --subreddit recipes --limit 50"
+        echo "  ./COMMANDS.sh scrape-continuous --interval 600"
         echo "  ./COMMANDS.sh search 'chicken pasta'"
         echo ""
         echo "📚 For detailed documentation, see: docs/COMMANDS.md"

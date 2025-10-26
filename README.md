@@ -197,6 +197,39 @@ asyncio.run(load_all())
 
 **Prerequisites:** Database must be running and configured (see Docker setup below)
 
+### 📡 Scrape Fresh Recipes from Reddit
+
+Monitor Reddit for new recipes and save them to CSV:
+
+```bash
+# Scrape once (run immediately and exit)
+source venv/bin/activate
+./COMMANDS.sh scrape --subreddit recipes --limit 50
+
+# Monitor continuously (check every 5 minutes)
+./COMMANDS.sh scrape-continuous --interval 300
+
+# Scrape from different subreddit
+./COMMANDS.sh scrape --subreddit cooking --limit 25
+
+# Output saved to: data/raw/Reddit_recipes_scraped.csv
+```
+
+**What it does:**
+- Fetches recent posts from r/recipes (or any subreddit)
+- Extracts recipe text from OP's comments or self-posts
+- Saves in CSV format matching existing Reddit_Recipes.csv structure
+- Tracks processed posts to avoid duplicates
+
+**After scraping**, process the new recipes through the pipeline:
+
+```bash
+# Process and load the scraped recipes
+python scripts/processing/process_and_load.py
+```
+
+**See:** [REDDIT_SCRAPER_GUIDE.md](./docs/REDDIT_SCRAPER_GUIDE.md) for complete documentation
+
 ### Search with Elasticsearch
 
 Enable full-text search and recommendations:
@@ -243,6 +276,7 @@ See [ELASTICSEARCH_GUIDE.md](./ELASTICSEARCH_GUIDE.md) for complete search docum
 - **Anthropic SDK** - Claude AI integration
 - **Temporal** - Workflow orchestration and rate limiting
 - **pytest** - Testing framework
+- **asyncpraw** - Reddit async API wrapper
 
 ### Data & Infrastructure
 - **PostgreSQL 15** - Relational database
@@ -415,9 +449,6 @@ mypy src/
 
 - agent for ?
     - cleaning data?
-
-
-
 
 
 ## 🆘 Troubleshooting
