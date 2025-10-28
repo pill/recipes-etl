@@ -87,6 +87,10 @@ source activate.sh
 # Load all processed JSON files to database (parallel)
 python3 scripts/processing/load_to_db.py
 
+# Load JSON files from a specific folder to database
+python3 scripts/processing/load_folder_to_db.py data/stage/Reddit_Recipes
+python3 scripts/processing/load_folder_to_db.py data/stage/2025-10-14/stromberg_data
+
 # Process AND load in one command
 python3 scripts/processing/process_and_load.py stromberg --local --batch-size 1000
 ```

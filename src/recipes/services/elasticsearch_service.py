@@ -76,8 +76,8 @@ class ElasticsearchService:
                                     "keyword": {"type": "keyword"}
                                 }
                             },
-                            "amount": {"type": "float"},
-                            "measurement": {"type": "keyword"},
+                            "quantity": {"type": "float"},
+                            "unit": {"type": "keyword"},
                             "notes": {"type": "text"}
                         }
                     },
@@ -145,8 +145,8 @@ class ElasticsearchService:
                     
                 ingredient_doc = {
                     "name": ing.ingredient.name,
-                    "amount": float(ing.amount) if ing.amount else None,
-                    "measurement": ing.measurement.name if ing.measurement else None,
+                    "quantity": float(ing.amount) if ing.amount else None,
+                    "unit": ing.measurement.name if ing.measurement else None,
                     "notes": ing.notes
                 }
                 ingredients.append(ingredient_doc)

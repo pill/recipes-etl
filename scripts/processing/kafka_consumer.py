@@ -194,7 +194,19 @@ class RecipeKafkaConsumer:
         
         # Process and load asynchronously if enabled
         if self.process_recipes or self.load_to_db:
-            asyncio.run(self._process_async(recipe_data))
+            # Create a new event loop for this message
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self._process_async(recipe_data))
+                finally:
+                    loop.close()
+            except Exception as e:
+                print(f"❌ Error in async processing: {e}")
+                import traceback
+                traceback.print_exc()
+                self.stats['errors'] += 1
         
         print(f"{'='*60}\n")
     

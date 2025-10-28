@@ -420,7 +420,7 @@ docker-compose -f docker-compose.python.yml down
 recipes-python/
 ├── src/recipes/              # Main Python package
 │   ├── models/              # Pydantic data models
-│   ├── services/            # Business logic (AI, DB, Search)
+│   ├── services/            # Business logic (AI, DB, Search, Reddit)
 │   ├── workflows/           # Temporal workflows & activities
 │   ├── database/            # Database connection & queries
 │   ├── utils/               # Utility functions
@@ -474,14 +474,18 @@ mypy src/
 
 ## 📈 Version History
 
+### v2.1
+- data firehose from Reddit data (r/recipes)
+- Kafka topic to collect scraper data
+
 ### v2.0 (Current - Python)
-- ✅ Complete migration to Python
-- ✅ Pydantic models with runtime validation
-- ✅ Better async/await support
-- ✅ Improved CLI interface
-- ✅ Temporal workflows preserved
-- ✅ 30x faster local parsing
-- ✅ Lower memory usage
+- Complete migration to Python
+- Pydantic models with runtime validation
+- Better async/await support
+- Improved CLI interface
+- Temporal workflows preserved
+- 30x faster local parsing
+- Lower memory usage
 
 ### v1.2 (TypeScript)
 - Optimized CSV → JSON → DB processing
@@ -499,8 +503,6 @@ mypy src/
 - Basic data processing
 
 ## Future Ideas
-- data firehose from Reddit data
-
 - categorization
     - ML for categorization
 

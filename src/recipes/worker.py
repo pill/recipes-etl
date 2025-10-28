@@ -57,10 +57,13 @@ async def main():
         "dotenv",
         "pathlib",
         "csv",
-        "hashlib"
+        "hashlib",
+        "io",
+        "sys",
+        "os"
     )
     
-    # Create worker with sandbox configuration
+    # Create main worker with sandbox configuration
     worker = Worker(
         client,
         task_queue="recipe-processing",
@@ -81,7 +84,9 @@ async def main():
         workflow_runner=SandboxedWorkflowRunner(restrictions=sandbox_restrictions)
     )
     
-    logger.info("Starting Temporal worker...")
+    logger.info("Starting Temporal worker on task queue: recipe-processing")
+    logger.info("Registered workflows: ProcessRecipeBatch*, LoadRecipesToDb*, RedditScraperWorkflow")
+    logger.info("Worker ready to process scheduled workflows")
     
     # Run worker
     await worker.run()

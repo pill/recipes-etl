@@ -1,12 +1,13 @@
 """AI service for recipe data extraction."""
 
 import json
+import re
 from typing import Dict, Any, Optional, List, Literal
 from anthropic import AsyncAnthropic
 from pydantic import BaseModel
 
 from ..config import ai_config
-from ..models.schemas import RecipeSchema
+from ..models.schemas import RecipeSchema, RecipeIngredientSchema
 
 
 class AIMessage(BaseModel):
@@ -171,8 +172,17 @@ Return only the JSON object, no additional text."""
         
         system_prompt = """You are an expert at extracting detailed recipe information from Reddit posts. 
 
+CRITICAL INGREDIENT PARSING RULES:
+- The 'item' field should ONLY contain the ingredient name (e.g., "beef stock", "pancetta", "shallots")
+- The 'amount' field should ONLY contain the quantity and measurement (e.g., "1 1/2 cups", "4 oz", "3 cloves")
+- NEVER put amounts like "1/2 cups beef stock" or "4oz pancetta" in the item field
+- NEVER include cooking instructions in the ingredients list
+- If you see text that starts with action verbs (Cook, Deglaze, Add, Fix, etc.), it's an INSTRUCTION, not an ingredient
+- Stop parsing ingredients when you encounter section headers like "**Preparation**", "**Instructions**", or "**Method**"
+- Do not include markdown formatting artifacts (**, *, #) in any field
+
 Focus on:
-- Accurate ingredient names and amounts
+- Accurate ingredient names and amounts with proper field separation
 - Clear, step-by-step instructions with descriptive titles
 - Proper timing information (prep time, cook time, chill time, etc.)
 - Equipment requirements (pan sizes, etc.)
@@ -184,22 +194,27 @@ For difficulty:
 - 'hard' for complex recipes with advanced techniques
 
 For cuisine:
-- Identify the cuisine type (e.g., 'Italian', 'Mexican', 'Chinese', 'Thai', 'Indian', 'French', 'Korean', 'American', etc.)
+- Identify the cuisine type (e.g., 'Italian', 'Mexican', 'Chinese', 'Thai', 'Indian', 'French', 'Korean', 'American', 'German', etc.)
 - If the cuisine name appears in the title (e.g., "Korean Beef Bowl"), use that cuisine type
 - Use the most specific cuisine type when possible
-- Consider ingredients as secondary signals (e.g., gochujang suggests Korean, fish sauce suggests Thai)
+- Consider ingredients as secondary signals (e.g., gochujang suggests Korean, fish sauce suggests Thai, bratwurst suggests German)
 
 For mealType:
 - Choose from: 'breakfast', 'lunch', 'dinner', 'snack', 'dessert'
 - Base on when the dish would typically be served
+- Main courses with meat, pasta, or substantial proteins are usually 'dinner'
+- Sweet baked goods, candies, and treats are 'dessert'
+- Light foods like sandwiches, salads, wraps are 'lunch'
+- Morning foods like pancakes, eggs, breakfast burritos are 'breakfast'
 
 For dietaryTags:
 - Include relevant tags: 'vegetarian', 'vegan', 'gluten-free', 'dairy-free', 'keto', 'paleo', etc.
 - Only include tags that clearly apply based on ingredients
+- If meat is present, do NOT tag as vegetarian or vegan
 
 Extract all available information and structure it according to the provided schema."""
         
-        return await self.extract_structured_data(
+        recipe = await self.extract_structured_data(
             text=reddit_post_text,
             schema=RecipeSchema,
             options={
@@ -207,6 +222,75 @@ Extract all available information and structure it according to the provided sch
                 'systemPrompt': system_prompt
             }
         )
+        
+        # Post-process and validate the recipe
+        return self._validate_and_cleanup_recipe(recipe)
+    
+    def _validate_and_cleanup_recipe(self, recipe: RecipeSchema) -> RecipeSchema:
+        """Validate and clean up recipe data to fix common parsing issues."""
+        
+        # Clean up ingredients
+        cleaned_ingredients = []
+        instruction_verbs = ['cook', 'add', 'mix', 'stir', 'deglaze', 'fix', 'serve', 'place', 
+                            'heat', 'pour', 'bring', 'reduce', 'simmer', 'bake', 'remove',
+                            'set', 'cover', 'wait', 'let', 'transfer', 'combine']
+        
+        for ing in recipe.ingredients:
+            item = ing.item.strip()
+            amount = ing.amount.strip() if ing.amount else ""
+            
+            # Skip if item looks like an instruction (starts with action verb)
+            first_word = item.split()[0].lower() if item.split() else ""
+            if first_word in instruction_verbs:
+                continue
+            
+            # Skip if item contains section headers or markdown
+            if any(header in item.lower() for header in ['**preparation', '**instructions', '**method', '**steps']):
+                continue
+            
+            # Check if amount and item are swapped (amount contains ingredient name)
+            # Pattern: "1/2 cups beef stock" or "4oz pancetta" or "1/3rd cup cream" in item field
+            if re.match(r'^\d+', item) or item.startswith('around'):
+                # Item field starts with a number - likely swapped
+                # Try to parse it (handle fractions with "rd", "st", "nd", "th" suffixes)
+                match = re.match(r'^(\d+(?:/\d+)?(?:st|nd|rd|th)?\s*(?:cups?|tbsp?|tsp?|oz|g|kg|ml|l|cloves?|pieces?)?)\s+(.+)$', item, re.IGNORECASE)
+                if match:
+                    # Swap them
+                    amount = match.group(1).strip()
+                    item = match.group(2).strip()
+            
+            # Clean up markdown and formatting
+            item = re.sub(r'\*+', '', item)
+            item = re.sub(r'\n+', ' ', item)
+            item = ' '.join(item.split())
+            
+            if len(item) > 2:  # Only keep valid ingredients
+                cleaned_ingredients.append(RecipeIngredientSchema(
+                    item=item,
+                    amount=amount or "to taste",
+                    notes=ing.notes
+                ))
+        
+        recipe.ingredients = cleaned_ingredients
+        
+        # Validate meal type - common mistakes
+        title_lower = recipe.title.lower()
+        
+        # Check for obvious main course dishes marked as dessert
+        main_course_indicators = ['brat', 'sausage', 'chicken', 'beef', 'pork', 'fish', 
+                                  'pasta', 'steak', 'chops', 'roast', 'burger', 'gravy']
+        dessert_indicators = ['cake', 'cookie', 'brownie', 'pie', 'ice cream', 'chocolate',
+                             'frosting', 'icing', 'candy', 'fudge', 'tart', 'pudding']
+        
+        if recipe.mealType == 'dessert':
+            # Check if this is actually a main course
+            has_main_course = any(indicator in title_lower for indicator in main_course_indicators)
+            has_dessert = any(indicator in title_lower for indicator in dessert_indicators)
+            
+            if has_main_course and not has_dessert:
+                recipe.mealType = 'dinner'
+        
+        return recipe
     
     async def summarize(
         self,

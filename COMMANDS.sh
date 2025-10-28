@@ -56,6 +56,10 @@ case "$1" in
     load)
         cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/processing/load_to_db.py
         ;;
+    load-folder)
+        shift
+        cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/processing/load_folder_to_db.py "$@"
+        ;;
     process)
         shift
         cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/processing/process_and_load.py "$@"
@@ -115,6 +119,7 @@ case "$1" in
         echo "  ./COMMANDS.sh worker        - Start Temporal worker"
         echo "  ./COMMANDS.sh client <args> - Run Temporal client"
         echo "  ./COMMANDS.sh load          - Load recipes to database"
+        echo "  ./COMMANDS.sh load-folder <folder> - Load JSON files from folder to database"
         echo "  ./COMMANDS.sh process <args> - Process and load recipes"
         echo ""
         echo "📡 Reddit Scraping:"
@@ -142,6 +147,7 @@ case "$1" in
         echo "💡 Examples:"
         echo "  ./COMMANDS.sh start                      # Start all services"
         echo "  ./COMMANDS.sh worker                     # Start Temporal worker"
+        echo "  ./COMMANDS.sh load-folder data/stage/Reddit_Recipes  # Load folder to DB"
         echo "  ./COMMANDS.sh schedule create --interval 5  # Schedule every 5 min"
         echo "  ./COMMANDS.sh schedule describe          # Check schedule status"
         echo "  ./COMMANDS.sh kafka-consumer --save-csv  # Consume from Kafka"

@@ -142,8 +142,11 @@ class IngredientParser:
         # Remove common prep instructions in parentheses at the end
         item_str = re.sub(r'\([^)]*\)$', '', item_str)
         
-        # Remove leading numbers and measurements
-        item_str = re.sub(r'^\d+(?:\.\d+)?\s*(?:[a-z]+\s+)?', '', item_str, flags=re.IGNORECASE)
+        # Only remove leading numbers followed by measurements (not just any word)
+        # Match patterns like: "200 g ", "1.5 cup ", "2 tbsp "
+        # But NOT single letters or short words that might be ingredient names
+        common_units = r'(?:cups?|c\.|tbsp?|tsp?|tablespoons?|teaspoons?|oz|ounces?|lbs?|pounds?|g|grams?|kg|ml|l|liters?|pieces?|pkg|packages?|cans?|jars?|bottles?)'
+        item_str = re.sub(rf'^\d+(?:\.\d+)?(?:/\d+)?\s*{common_units}\s+', '', item_str, flags=re.IGNORECASE)
         
         # Clean up whitespace
         item_str = ' '.join(item_str.split())

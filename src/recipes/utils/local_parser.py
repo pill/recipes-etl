@@ -397,7 +397,9 @@ class LocalRecipeParser:
                          'cereal', 'granola', 'muffin', 'bagel', 'croissant', 'eggs benedict',
                          'breakfast burrito', 'brunch', 'morning'],
             'lunch': ['lunch', 'sandwich', 'wrap', 'salad', 'soup and salad', 'midday'],
-            'dinner': ['dinner', 'supper', 'main course', 'entrée', 'entree', 'evening meal'],
+            'dinner': ['dinner', 'supper', 'main course', 'entrée', 'entree', 'evening meal',
+                      'brat', 'bratwurst', 'sausage', 'steak', 'chops', 'roast', 'burger', 
+                      'gravy', 'pasta', 'chicken', 'beef', 'pork', 'fish'],
             'dessert': ['dessert', 'cake', 'cookie', 'brownie', 'pie', 'tart', 'pudding',
                        'ice cream', 'sorbet', 'mousse', 'truffle', 'candy', 'sweet', 'frosting',
                        'cheesecake', 'cupcake', 'macaron', 'tiramisu', 'parfait', 'fudge'],
@@ -406,6 +408,25 @@ class LocalRecipeParser:
         }
         
         # Check for explicit meal type mentions
+        # Prioritize dinner over dessert if there are main course indicators
+        dinner_score = sum(1 for keyword in meal_keywords['dinner'] if keyword in combined)
+        dessert_score = sum(1 for keyword in meal_keywords['dessert'] if keyword in combined)
+        
+        # If both dinner and dessert keywords found, prefer dinner
+        if dinner_score > 0 and dessert_score > 0:
+            # Check which is more prominent in the title
+            dinner_in_title = any(keyword in title_lower for keyword in meal_keywords['dinner'])
+            dessert_in_title = any(keyword in title_lower for keyword in meal_keywords['dessert'])
+            
+            if dinner_in_title and not dessert_in_title:
+                return 'dinner'
+            elif dessert_in_title and not dinner_in_title:
+                return 'dessert'
+            # If both or neither in title, prefer dinner if it has more matches
+            elif dinner_score >= dessert_score:
+                return 'dinner'
+        
+        # Otherwise check all meal types
         for meal_type, keywords in meal_keywords.items():
             matches = sum(1 for keyword in keywords if keyword in combined)
             if matches >= 1:
@@ -668,6 +689,44 @@ class LocalRecipeParser:
         if not text or len(text) > 200:
             return None
         
+        # Strip markdown formatting first
+        text = text.strip()
+        text = re.sub(r'\*+', '', text)  # Remove asterisks
+        text = re.sub(r'#+\s*', '', text)  # Remove hashes
+        text = text.strip()
+        
+        if not text:
+            return None
+        
+        # Check if it's a section header (ends with colon and is short)
+        if text.endswith(':') and len(text) < 50:
+            # Common section headers
+            section_markers = ['dough', 'sauce', 'topping', 'garnish', 'marinade', 'filling', 
+                             'crust', 'batter', 'glaze', 'syrup', 'broth', 'base', 'layer']
+            text_lower = text[:-1].lower()  # Remove colon for checking
+            if any(marker in text_lower for marker in section_markers):
+                return None
+            # Generic short text ending in colon is likely a header
+            if len(text) < 30:
+                return None
+        
+        # Check if text looks like an instruction rather than an ingredient
+        instruction_verbs = ['cook', 'add', 'mix', 'stir', 'deglaze', 'fix', 'serve', 'place',
+                            'heat', 'pour', 'bring', 'reduce', 'simmer', 'bake', 'remove',
+                            'set', 'cover', 'wait', 'let', 'transfer', 'combine', 'whisk',
+                            'beat', 'fold', 'knead', 'roll', 'cut', 'chop', 'slice', 'dice']
+        
+        first_word = text.split()[0].lower() if text.split() else ""
+        if first_word in instruction_verbs:
+            # This looks like an instruction, not an ingredient
+            return None
+        
+        # Skip section headers in text
+        text_lower = text.lower()
+        if any(header in text_lower for header in ['preparation', 'instructions', 'method', 'steps', 'directions']):
+            if len(text) < 50:  # Short text with these words is likely a header
+                return None
+        
         # Better pattern: Look for amount at the start, followed by optional unit, then ingredient
         # Handles: "2 cups flour", "1/2 tsp salt", "About 1.5 packages worth of lady fingers"
         # Pattern breakdown:
@@ -678,7 +737,9 @@ class LocalRecipeParser:
         
         # Try multiple patterns in order of specificity
         patterns = [
-            # "Ground beef (1.8 lb / 800 g)" - extract amount from parentheses
+            # Reddit format: "270 g (9.5 oz) Cake Wheat Flour" - amount with unit, then parenthetical alt, then ingredient
+            r'^([\d/\-\.x]+)\s+([a-zA-Z]+)\s*\([^)]+\)\s+(.+)$',
+            # "Ground beef (1.8 lb / 800 g)" - extract amount from parentheses  
             r'^(.+?)\s*\(([^)]+)\).*$',
             # "2 cups flour" or "1/2 tsp salt"
             r'^([\d/\-\.]+)\s+([a-zA-Z]+)\s+(.+)$',

@@ -261,6 +261,7 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
         from ..models.recipe import Recipe, RecipeIngredient, Ingredient, Measurement
         from ..models.schemas import RecipeSchema
         from ..utils.ingredient_parser import get_ingredient_parser
+        import re
         
         # Handle old format (with entryNumber, metadata, recipeData wrapper)
         if 'recipeData' in recipe_json:
@@ -309,6 +310,20 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
                     })
                 recipe_json['instructions'] = converted_instructions
         
+        # Clean up <UNKNOWN> and null values for optional fields
+        # Schema expects either None or a valid string, not "<UNKNOWN>"
+        for field in ['prepTime', 'cookTime', 'chillTime', 'panSize', 'difficulty', 'cuisine', 'mealType']:
+            if field in recipe_json:
+                value = recipe_json[field]
+                if value == '<UNKNOWN>' or value == 'null' or value == '':
+                    recipe_json[field] = None
+        
+        # Handle difficulty specifically - ensure it's a valid value or None
+        if 'difficulty' in recipe_json:
+            valid_difficulty = {'easy', 'medium', 'hard'}
+            if recipe_json['difficulty'] not in valid_difficulty:
+                recipe_json['difficulty'] = None
+        
         # Parse as RecipeSchema
         recipe_schema = RecipeSchema.model_validate(recipe_json)
         
@@ -334,9 +349,14 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
             amount, measurement_name, unit_type = parser.parse_amount_string(ing_schema.amount)
             
             # Clean the ingredient name
-            ingredient_name = parser.parse_ingredient_item(ing_schema.item)
-            if not ingredient_name:
-                ingredient_name = ing_schema.item  # Fallback to original
+            # For structured data (like Stromberg), ing_schema.item is already clean
+            # Only apply cleaning if it looks like it needs it (has numbers at start)
+            ingredient_name = ing_schema.item
+            if ingredient_name and re.match(r'^\d', ingredient_name):
+                # Has leading numbers, try to clean
+                cleaned = parser.parse_ingredient_item(ingredient_name)
+                if cleaned and len(cleaned) > 2:  # Only use cleaned version if substantial
+                    ingredient_name = cleaned
             
             # Truncate to fit database constraints (VARCHAR(200))
             ingredient_name = ingredient_name[:200] if ingredient_name else "Unknown"

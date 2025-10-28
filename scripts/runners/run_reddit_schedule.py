@@ -191,7 +191,10 @@ async def describe_schedule(
         if description.info.recent_actions:
             print(f"\nRecent runs:")
             for action in description.info.recent_actions[-5:]:
-                print(f"  - {action.start_workflow_action.workflow_id}")
+                if hasattr(action, 'start_workflow_action'):
+                    print(f"  - {action.start_workflow_action.workflow_id}")
+                else:
+                    print(f"  - Action at {action.actual_time}")
         
         print(f"{'='*60}")
         

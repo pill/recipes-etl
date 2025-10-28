@@ -87,7 +87,19 @@ class ProcessAndLoadManager:
             # Count entries in each CSV
             try:
                 import pandas as pd
-                df = pd.read_csv(csv_file)
+                # Try multiple encodings for Reddit CSV files
+                encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+                df = None
+                for encoding in encodings:
+                    try:
+                        df = pd.read_csv(csv_file, encoding=encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                
+                if df is None:
+                    raise Exception("Could not decode file with any common encoding")
+                
                 entries = len(df)
                 total_entries += entries
                 print(f"  📄 {os.path.basename(csv_file)}: {entries} entries")
@@ -103,7 +115,19 @@ class ProcessAndLoadManager:
             
             try:
                 import pandas as pd
-                df = pd.read_csv(csv_file)
+                # Try multiple encodings for Reddit CSV files
+                encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+                df = None
+                for encoding in encodings:
+                    try:
+                        df = pd.read_csv(csv_file, encoding=encoding)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                
+                if df is None:
+                    raise Exception("Could not decode file with any common encoding")
+                
                 total_entries = len(df)
                 
                 # Process in batches
@@ -165,7 +189,19 @@ class ProcessAndLoadManager:
         
         try:
             import pandas as pd
-            df = pd.read_csv(csv_file)
+            # Try multiple encodings
+            encodings = ['utf-8', 'latin-1', 'iso-8859-1', 'cp1252']
+            df = None
+            for encoding in encodings:
+                try:
+                    df = pd.read_csv(csv_file, encoding=encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            
+            if df is None:
+                raise Exception("Could not decode file with any common encoding")
+            
             total_entries = len(df)
             print(f"📊 Found {total_entries} entries")
             
