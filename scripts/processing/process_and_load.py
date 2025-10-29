@@ -48,7 +48,7 @@ class ProcessAndLoadManager:
     def __init__(self, batch_size: int = 500, parallel: bool = True):
         self.batch_size = batch_size
         self.parallel = parallel
-        self.delay_between_batches_ms = 200 if parallel else 0
+        self.delay_between_batches_ms = 20 if parallel else 0
 
     async def process_stromberg_dataset(self, use_ai: bool = False) -> None:
         """Process the entire Stromberg dataset (13,389 files)."""

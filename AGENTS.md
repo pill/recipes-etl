@@ -11,6 +11,7 @@
 - Run tests after making code changes
 - Fix any test or type errors until the whole suite is green.
 - Add or update tests for the code you change, even if nobody asked.
+- Add a tests for any fix made to avoid regressions
 
 
 ## Documentation

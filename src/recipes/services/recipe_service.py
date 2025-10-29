@@ -5,6 +5,7 @@ from typing import List, Optional, Dict, Any
 from ..database import get_pool
 from ..models.recipe import Recipe, RecipeFilters, RecipeIngredient, Ingredient, Measurement
 from .ingredient_service import IngredientService
+from ..utils.uuid_utils import generate_recipe_uuid, generate_reddit_recipe_uuid
 
 
 class RecipeService:
@@ -18,18 +19,28 @@ class RecipeService:
         try:
             async with pool.acquire() as conn:
                 async with conn.transaction():
+                    # Generate deterministic UUID if not already set
+                    if not recipe.uuid:
+                        if recipe.reddit_post_id:
+                            # For Reddit recipes, use post ID for consistency
+                            recipe.uuid = generate_reddit_recipe_uuid(recipe.title, recipe.reddit_post_id)
+                        else:
+                            # For other recipes, use title + source_url
+                            recipe.uuid = generate_recipe_uuid(recipe.title, recipe.source_url)
+                    
                     # Insert the recipe
                     recipe_query = """
                         INSERT INTO recipes (
-                            title, description, instructions, prep_time_minutes,
+                            uuid, title, description, instructions, prep_time_minutes,
                             cook_time_minutes, total_time_minutes, servings, difficulty,
                             cuisine_type, meal_type, dietary_tags, source_url,
                             reddit_post_id, reddit_author, reddit_score, reddit_comments_count
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                         RETURNING *
                     """
                     
                     recipe_values = [
+                        recipe.uuid,
                         recipe.title,
                         recipe.description,
                         json.dumps(recipe.instructions),
@@ -48,10 +59,23 @@ class RecipeService:
                         recipe.reddit_comments_count
                     ]
                     
-                    recipe_row = await conn.fetchrow(recipe_query, *recipe_values)
+                    try:
+                        recipe_row = await conn.fetchrow(recipe_query, *recipe_values)
+                    except Exception as insert_error:
+                        error_msg = str(insert_error)
+                        # Check if it's a duplicate UUID error
+                        if 'duplicate key' in error_msg.lower() and 'uuid' in error_msg.lower():
+                            print(f"Warning: Recipe '{recipe.title[:50]}' has duplicate UUID {recipe.uuid}. Skipping.")
+                            # Try to fetch existing recipe with this UUID
+                            existing = await conn.fetchrow('SELECT * FROM recipes WHERE uuid = $1', recipe.uuid)
+                            if existing:
+                                print(f"  Existing recipe: '{existing['title'][:50]}' (ID: {existing['id']})")
+                        else:
+                            print(f"Error: Failed to insert recipe '{recipe.title[:50]}': {type(insert_error).__name__}: {error_msg}")
+                        return None
                     
                     if not recipe_row:
-                        print(f"Error: Failed to insert recipe '{recipe.title[:50]}'")
+                        print(f"Error: Recipe insert succeeded but returned no row for '{recipe.title[:50]}'")
                         return None
                     
                     recipe_id = recipe_row['id']
@@ -74,7 +98,9 @@ class RecipeService:
             
             return created_recipe
         except Exception as e:
-            print(f"Error creating recipe '{recipe.title[:50] if recipe.title else 'No title'}': {str(e)}")
+            import traceback
+            print(f"Error creating recipe '{recipe.title[:50] if recipe.title else 'No title'}': {type(e).__name__}: {str(e)}")
+            print(f"Traceback: {traceback.format_exc()}")
             return None
     
     @staticmethod
@@ -498,6 +524,7 @@ class RecipeService:
         
         return Recipe(
             id=row['id'],
+            uuid=str(row['uuid']),
             title=row['title'],
             description=row['description'],
             ingredients=[],

@@ -315,14 +315,47 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
         for field in ['prepTime', 'cookTime', 'chillTime', 'panSize', 'difficulty', 'cuisine', 'mealType']:
             if field in recipe_json:
                 value = recipe_json[field]
+                # Handle various invalid/empty values
                 if value == '<UNKNOWN>' or value == 'null' or value == '':
                     recipe_json[field] = None
+                # Convert integers to strings for time fields
+                elif field in ['prepTime', 'cookTime', 'chillTime'] and isinstance(value, (int, float)):
+                    recipe_json[field] = f"{int(value)} minutes"
         
-        # Handle difficulty specifically - ensure it's a valid value or None
-        if 'difficulty' in recipe_json:
+        # Handle difficulty specifically - normalize case and ensure it's a valid value or None
+        if 'difficulty' in recipe_json and recipe_json['difficulty']:
+            # Normalize to lowercase
+            difficulty_value = str(recipe_json['difficulty']).lower().strip()
             valid_difficulty = {'easy', 'medium', 'hard'}
-            if recipe_json['difficulty'] not in valid_difficulty:
+            if difficulty_value in valid_difficulty:
+                recipe_json['difficulty'] = difficulty_value
+            else:
                 recipe_json['difficulty'] = None
+        
+        # Handle mealType specifically - normalize and ensure it's a valid value or None
+        if 'mealType' in recipe_json and recipe_json['mealType']:
+            # Normalize to lowercase
+            meal_type_value = str(recipe_json['mealType']).lower().strip()
+            valid_meal_types = {'breakfast', 'lunch', 'dinner', 'snack', 'dessert'}
+            
+            # Map common variations to valid values
+            meal_type_mapping = {
+                'side dish': 'snack',
+                'side': 'snack',
+                'soup': 'lunch',
+                'appetizer': 'snack',
+                'beverage': 'snack',
+                'drink': 'snack'
+            }
+            
+            # Check if it's already valid
+            if meal_type_value in valid_meal_types:
+                recipe_json['mealType'] = meal_type_value
+            # Try mapping
+            elif meal_type_value in meal_type_mapping:
+                recipe_json['mealType'] = meal_type_mapping[meal_type_value]
+            else:
+                recipe_json['mealType'] = None
         
         # Parse as RecipeSchema
         recipe_schema = RecipeSchema.model_validate(recipe_json)
@@ -338,20 +371,63 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
         # Convert ingredients using the parser
         parser = get_ingredient_parser()
         recipe_ingredients = []
+        skipped_count = 0
+        total_count = len(recipe_schema.ingredients)
         
         for idx, ing_schema in enumerate(recipe_schema.ingredients):
             # Skip malformed ingredients (entire recipe in one field)
             if len(ing_schema.item) > 500:
                 print(f"Warning: Skipping malformed ingredient (too long: {len(ing_schema.item)} chars)")
+                skipped_count += 1
+                continue
+            
+            # Skip ingredients that are clearly not ingredients (contain instructions, formatting, etc.)
+            item_lower = ing_schema.item.lower()
+            skip_patterns = [
+                # Instructions/directions
+                'how to do it', 'directions*', 'instructions',
+                
+                # Cooking actions
+                'preheat the', 'in the meantime', 'cooking the', 'bake at', 'bake for',
+                'blend everything', 'transfer to', 'mix the', 'place the', 'pour the', 
+                'take the', 'add the', 'stir', 'remove from', 'set aside', 'let sit',
+                'let it rest', 'allow it to', 'continue cooking', 'reduce heat',
+                'warm a', 'heat a', 'bring to a boil',
+                
+                # Common instruction starters
+                'rinse ', 'drain ', 'clean and', 'top with', 'cover with', 'line a',
+                'spread the', 'evenly spread', 'put crab', 'start by adding',
+                'you can find', 'if you', 'grease baking', 'stretch the',
+                
+                # Formatting/metadata
+                '[video]', '**[', 'recipe*', '&amp;x200b', 'optional as topping',
+                'check out my instagram', 'support from', 'if you make this',
+                'if you like my recipes',
+            ]
+            
+            if any(pattern in item_lower for pattern in skip_patterns):
+                skipped_count += 1
+                continue
+            
+            # Skip ingredients with only formatting characters
+            if not ing_schema.item.strip('*[]()- \n\t'):
+                skipped_count += 1
                 continue
             
             # Parse the amount string
             amount, measurement_name, unit_type = parser.parse_amount_string(ing_schema.amount)
             
             # Clean the ingredient name
+            import html
+            
+            # Unescape HTML entities (e.g., &amp; -> &)
+            ingredient_name = html.unescape(ing_schema.item) if ing_schema.item else ''
+            
+            # Remove extra whitespace and newlines
+            ingredient_name = ' '.join(ingredient_name.split())
+            
             # For structured data (like Stromberg), ing_schema.item is already clean
             # Only apply cleaning if it looks like it needs it (has numbers at start)
-            ingredient_name = ing_schema.item
             if ingredient_name and re.match(r'^\d', ingredient_name):
                 # Has leading numbers, try to clean
                 cleaned = parser.parse_ingredient_item(ingredient_name)
@@ -414,8 +490,36 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
         elif cook_time:
             total_time = cook_time
         
+        # Log filtering statistics
+        if skipped_count > 0:
+            print(f"Filtered ingredients for '{recipe_schema.title[:50]}': {len(recipe_ingredients)} valid, {skipped_count} skipped out of {total_count} total")
+        
+        # Validate we have enough ingredients after filtering
+        if len(recipe_ingredients) < 2:
+            return {
+                'success': False,
+                'jsonFilePath': json_file_path,
+                'error': f"Recipe has too few valid ingredients after filtering ({len(recipe_ingredients)} valid, {skipped_count} skipped out of {total_count} total). Most ingredients were instructions or malformed data."
+            }
+        
+        # Check if UUID already exists in JSON (generated at JSON creation time)
+        existing_uuid = recipe_json.get('uuid')
+        
+        # Generate source_url for UUID if not provided
+        source_url_for_uuid = None
+        if recipe_ingredients:
+            # Create a fingerprint from first 5 ingredients
+            ingredient_fingerprint = '|'.join([
+                ing.ingredient.name[:50] if ing.ingredient else ''
+                for ing in recipe_ingredients[:5]
+            ])
+            import hashlib
+            fingerprint_hash = hashlib.md5(ingredient_fingerprint.encode()).hexdigest()[:8]
+            source_url_for_uuid = f"staged:{fingerprint_hash}"
+        
         # Create recipe (with truncation for database constraints)
         recipe = Recipe(
+            uuid=existing_uuid,  # Use UUID from JSON if available
             title=recipe_schema.title[:500] if recipe_schema.title else "Untitled Recipe",
             description=recipe_schema.description[:1000] if recipe_schema.description else None,
             instructions=instructions,
@@ -427,8 +531,23 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
             difficulty=recipe_schema.difficulty,
             cuisine_type=recipe_schema.cuisine,
             meal_type=recipe_schema.mealType,
-            dietary_tags=recipe_schema.dietaryTags
+            dietary_tags=recipe_schema.dietaryTags,
+            source_url=source_url_for_uuid  # Use fingerprint-based URL for UUID generation
         )
+        
+        # Validate recipe data before attempting to create
+        if not recipe.title or not recipe.title.strip():
+            return {
+                'success': False,
+                'jsonFilePath': json_file_path,
+                'error': 'Recipe title is empty or invalid'
+            }
+        
+        if not recipe.ingredients:
+            print(f"Warning: Recipe '{recipe.title[:50]}' has no ingredients")
+        
+        if not recipe.instructions:
+            print(f"Warning: Recipe '{recipe.title[:50]}' has no instructions")
         
         # Check if recipe already exists
         existing = await RecipeService.get_by_title(recipe.title)
@@ -455,6 +574,7 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
             'success': True,
             'jsonFilePath': json_file_path,
             'recipeId': created_recipe.id,
+            'uuid': str(created_recipe.uuid),
             'title': recipe.title,
             'alreadyExists': False
         }

@@ -51,6 +51,7 @@ class ElasticsearchService:
             "mappings": {
                 "properties": {
                     "id": {"type": "integer"},
+                    "uuid": {"type": "keyword"},
                     "title": {
                         "type": "text",
                         "analyzer": "recipe_analyzer",
@@ -84,13 +85,15 @@ class ElasticsearchService:
                     "prep_time_minutes": {"type": "integer"},
                     "cook_time_minutes": {"type": "integer"},
                     "total_time_minutes": {"type": "integer"},
-                    "servings": {"type": "integer"},
+                    "servings": {"type": "float"},
                     "difficulty": {"type": "keyword"},
                     "cuisine_type": {"type": "keyword"},
                     "meal_type": {"type": "keyword"},
                     "dietary_tags": {"type": "keyword"},
+                    "source_url": {"type": "keyword"},
                     "reddit_score": {"type": "integer"},
                     "reddit_author": {"type": "keyword"},
+                    "reddit_post_id": {"type": "keyword"},
                     "created_at": {"type": "date"}
                 }
             }
@@ -180,6 +183,7 @@ class ElasticsearchService:
             "_index": self.index_name,
             "_source": {
                 "id": recipe.id,
+                "uuid": recipe.uuid,
                 "title": recipe.title,
                 "description": recipe.description,
                 "instructions": instructions_array,
@@ -192,8 +196,10 @@ class ElasticsearchService:
                 "cuisine_type": recipe.cuisine_type,
                 "meal_type": recipe.meal_type,
                 "dietary_tags": recipe.dietary_tags,
+                "source_url": recipe.source_url,
                 "reddit_score": recipe.reddit_score,
                 "reddit_author": recipe.reddit_author,
+                "reddit_post_id": recipe.reddit_post_id,
                 "created_at": recipe.created_at.isoformat() if recipe.created_at else None
             }
         }

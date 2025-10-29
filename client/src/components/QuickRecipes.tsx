@@ -4,6 +4,7 @@ import Pagination from './Pagination'
 
 interface Recipe {
   id?: number
+  uuid?: string
   title: string
   description?: string
   ingredients: Array<{
@@ -13,8 +14,15 @@ interface Recipe {
     notes?: string
   }>
   instructions: string[]
+  prep_time_minutes?: number
+  cook_time_minutes?: number
   total_time_minutes?: number
+  servings?: number
   difficulty?: string
+  cuisine_type?: string
+  meal_type?: string
+  dietary_tags?: string[]
+  source_url?: string
 }
 
 const PAGE_SIZE = 10
@@ -119,20 +127,24 @@ export default function QuickRecipes() {
             onPageChange={handlePageChange}
           />
           {recipes.map((recipe, index) => (
-            <div key={index}>
-              <RecipeCard
-                id={recipe.id}
-                title={recipe.title}
-                description={recipe.description}
-                ingredients={recipe.ingredients}
-                instructions={recipe.instructions}
-              />
-              {recipe.total_time_minutes && (
-                <p style={{ fontSize: '0.9rem', color: '#888' }}>
-                  ⏱️ {recipe.total_time_minutes} minutes
-                </p>
-              )}
-            </div>
+            <RecipeCard
+              key={index}
+              id={recipe.id}
+              uuid={recipe.uuid}
+              title={recipe.title}
+              description={recipe.description}
+              ingredients={recipe.ingredients}
+              instructions={recipe.instructions}
+              prep_time_minutes={recipe.prep_time_minutes}
+              cook_time_minutes={recipe.cook_time_minutes}
+              total_time_minutes={recipe.total_time_minutes}
+              servings={recipe.servings}
+              difficulty={recipe.difficulty}
+              cuisine_type={recipe.cuisine_type}
+              meal_type={recipe.meal_type}
+              dietary_tags={recipe.dietary_tags}
+              source_url={recipe.source_url}
+            />
           ))}
           <Pagination
             currentPage={currentPage}

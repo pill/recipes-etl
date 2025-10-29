@@ -3,6 +3,7 @@ import RecipeCard from './RecipeCard'
 
 interface Recipe {
   id?: number
+  uuid?: string
   title: string
   description?: string
   ingredients: Array<{
@@ -76,10 +77,18 @@ export default function RandomRecipe() {
       {recipe && (
         <RecipeCard
           id={recipe.id}
+          uuid={recipe.uuid}
           title={recipe.title}
           description={recipe.description}
           ingredients={recipe.ingredients}
           instructions={recipe.instructions}
+          prep_time_minutes={recipe.prep_time_minutes}
+          cook_time_minutes={recipe.cook_time_minutes}
+          total_time_minutes={recipe.total_time_minutes}
+          servings={recipe.servings}
+          difficulty={recipe.difficulty}
+          cuisine_type={recipe.cuisine_type}
+          meal_type={recipe.meal_type}
         />
       )}
     </div>

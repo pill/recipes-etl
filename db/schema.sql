@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS measurements (
 -- Create recipes table
 CREATE TABLE IF NOT EXISTS recipes (
     id SERIAL PRIMARY KEY,
+    uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
     title VARCHAR(500) NOT NULL,
     description TEXT,
     instructions JSONB NOT NULL DEFAULT '[]',
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS recipe_ingredients (
 );
 
 -- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_recipes_uuid ON recipes(uuid);
 CREATE INDEX IF NOT EXISTS idx_recipes_title ON recipes USING gin(to_tsvector('english', title));
 CREATE INDEX IF NOT EXISTS idx_recipes_cuisine_type ON recipes(cuisine_type);
 CREATE INDEX IF NOT EXISTS idx_recipes_meal_type ON recipes(meal_type);

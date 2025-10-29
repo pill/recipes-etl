@@ -46,6 +46,7 @@ python -m recipes.cli test-ai
 - **Local Parsing**: Fast, free alternative using pattern matching (30x faster!)
 - **Temporal Workflows**: Robust batch processing with retry logic
 - **PostgreSQL Database**: Relational storage with full schema
+- **UUID Tracking**: Track recipes through entire pipeline with unique identifiers
 - **Elasticsearch**: Full-text search and recommendations
 - **CLI Interface**: Easy command-line tools
 - **Docker Support**: Complete containerization

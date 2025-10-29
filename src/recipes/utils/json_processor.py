@@ -3,15 +3,24 @@
 import json
 import os
 from typing import Dict, Any, Optional
+import hashlib
 import aiofiles
 from ..models.schemas import RecipeSchema
+from ..utils.uuid_utils import generate_recipe_uuid
 
 
 class JSONProcessor:
     """JSON processor for recipe data."""
     
-    async def save_recipe_json(self, recipe_data: RecipeSchema, entry_number: int, subdirectory: Optional[str] = None) -> str:
-        """Save recipe data to a JSON file, optionally in a subdirectory."""
+    async def save_recipe_json(self, recipe_data: RecipeSchema, entry_number: int, subdirectory: Optional[str] = None, source_url: Optional[str] = None) -> str:
+        """Save recipe data to a JSON file with deterministic UUID, optionally in a subdirectory.
+        
+        Args:
+            recipe_data: RecipeSchema object containing recipe data
+            entry_number: Entry number for filename
+            subdirectory: Optional subdirectory within data/stage/
+            source_url: Optional source URL for UUID generation (if not provided, uses ingredient fingerprint)
+        """
         # Create output directory if it doesn't exist
         if subdirectory:
             output_dir = os.path.join("data/stage", subdirectory)
@@ -20,12 +29,26 @@ class JSONProcessor:
         
         os.makedirs(output_dir, exist_ok=True)
         
-        # Generate output filename
-        output_filename = f"entry_{entry_number}.json"
-        output_path = os.path.join(output_dir, output_filename)
-        
-        # Convert to dict and save
+        # Convert to dict first
         recipe_dict = recipe_data.model_dump()
+        
+        # Generate deterministic UUID
+        # If no source_url provided, create fingerprint from first 5 ingredients
+        if not source_url and recipe_data.ingredients:
+            ingredient_fingerprint = '|'.join([
+                ing.item[:50] if ing.item else ''
+                for ing in recipe_data.ingredients[:5]
+            ])
+            fingerprint_hash = hashlib.md5(ingredient_fingerprint.encode()).hexdigest()[:8]
+            source_url = f"staged:{fingerprint_hash}"
+        
+        # Generate UUID using same logic as database insertion
+        uuid = generate_recipe_uuid(recipe_data.title, source_url)
+        recipe_dict['uuid'] = uuid
+        
+        # Use UUID as filename instead of entry number
+        output_filename = f"{uuid}.json"
+        output_path = os.path.join(output_dir, output_filename)
         
         async with aiofiles.open(output_path, 'w', encoding='utf-8') as file:
             await file.write(json.dumps(recipe_dict, indent=2, ensure_ascii=False))

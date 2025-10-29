@@ -48,6 +48,7 @@ class Recipe(BaseModel):
     """Recipe model."""
     
     id: Optional[int] = None
+    uuid: Optional[str] = None  # Generated deterministically from title + source_url
     title: str
     description: Optional[str] = None
     ingredients: List[RecipeIngredient] = Field(default_factory=list)
