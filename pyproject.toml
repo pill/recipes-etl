@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "recipes-etl"
-version = "1.2.0"
+version = "2.2.0"
 description = "AI-powered recipe data parser and analyzer"
 authors = ["Your Name <your.email@example.com>"]
 readme = "README.md"

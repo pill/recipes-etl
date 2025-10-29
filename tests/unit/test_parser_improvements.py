@@ -6,7 +6,8 @@ import sys
 from pathlib import Path
 
 # Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
 from recipes.services.ai_service import AIService
 from recipes.models.schemas import RecipeSchema, RecipeIngredientSchema, RecipeInstructionSchema

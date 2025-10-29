@@ -7,13 +7,16 @@ import os
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
 from recipes.utils.json_processor import JSONProcessor
 from recipes.models.schemas import RecipeSchema, RecipeIngredientSchema, RecipeInstructionSchema
 
 
+import pytest
+
+@pytest.mark.asyncio
 async def test_uuid_filename():
     """Test that JSON files are saved with UUID as filename."""
     print("Testing UUID filename generation...")

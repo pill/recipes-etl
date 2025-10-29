@@ -1,6 +1,13 @@
 """Basic tests for the recipes Python package."""
 
+import sys
+from pathlib import Path
 import pytest
+
+# Add src to path
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / 'src'))
+
 from recipes.models.recipe import Recipe, Ingredient, Measurement, RecipeIngredient
 from recipes.models.schemas import RecipeSchema, RecipeIngredientSchema, RecipeInstructionSchema
 

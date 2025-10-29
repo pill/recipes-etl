@@ -6,7 +6,7 @@ import sys
 import json
 from pathlib import Path
 
-# Add src to path (script is now in scripts/processing/)
+# Add src to path (script is now in tests/scripts/)
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
