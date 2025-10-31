@@ -30,9 +30,11 @@ async def scrape_reddit_recipes_activity(
     
     # Add scripts to path
     PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
-    sys.path.insert(0, str(PROJECT_ROOT / 'scripts' / 'processing'))
+    scripts_path = str(PROJECT_ROOT / 'scripts' / 'processing')
+    if scripts_path not in sys.path:
+        sys.path.insert(0, scripts_path)
     
-    from scrape_reddit_recipes import RedditRecipeScraper
+    from scrape_reddit_recipes import RedditRecipeScraper  # type: ignore
     
     # Create scraper
     scraper = RedditRecipeScraper(
