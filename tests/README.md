@@ -46,7 +46,7 @@ pytest tests/unit/test_uuid_filename.py -v
 ### Integration Tests (Requires Services)
 ```bash
 # Start required services first
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 
 # Run all integration tests
 pytest tests/integration/ -v

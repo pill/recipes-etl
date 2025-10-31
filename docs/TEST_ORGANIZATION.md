@@ -82,7 +82,7 @@ pytest tests/unit/ -v
 ### All Integration Tests
 ```bash
 # Requires services running
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 pytest tests/integration/ -v
 ```
 

@@ -26,13 +26,13 @@ python3 scripts/setup/check-db.py
 ### Start Infrastructure (Docker)
 ```bash
 # Start all services (Temporal, PostgreSQL, Elasticsearch)
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 
 # Check logs
-docker-compose -f docker-compose.python.yml logs -f
+docker-compose logs -f
 
 # Stop services
-docker-compose -f docker-compose.python.yml down
+docker-compose down
 ```
 
 ### Start Temporal Worker
@@ -202,7 +202,7 @@ mypy src/
 source activate.sh
 
 # 2. Start services (in one terminal)
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 
 # 3. Start worker (in another terminal)
 source activate.sh
@@ -232,7 +232,7 @@ python -m recipes.cli test-db
 ## 💡 Tips
 
 1. **Always activate environment first**: `source activate.sh`
-2. **Check logs if something fails**: `docker-compose -f docker-compose.python.yml logs -f`
+2. **Check logs if something fails**: `docker-compose logs -f`
 3. **Use absolute paths when unsure**: `/Users/pavery/dev/recipes-etl/scripts/...`
 4. **Parallel processing is fastest**: Use `batch-parallel` with batch size 20-50
 5. **Local parsing is 30x faster**: Only use AI when you need higher accuracy
@@ -257,7 +257,7 @@ source activate.sh
 **Database connection error?**
 ```bash
 # Check services are running
-docker-compose -f docker-compose.python.yml ps
+docker-compose ps
 
 # Check database connection
 python3 scripts/setup/check-db.py

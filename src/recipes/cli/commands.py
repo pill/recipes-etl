@@ -215,7 +215,7 @@ async def _sync_search(batch_size: int, recreate_index: bool):
         click.echo("🏥 Checking Elasticsearch health...")
         if not await es_service.health_check():
             click.echo("❌ Elasticsearch is not healthy or not running!")
-            click.echo("💡 Start Elasticsearch with: docker-compose -f docker-compose.python.yml up -d elasticsearch")
+            click.echo("💡 Start Elasticsearch with: docker-compose up -d elasticsearch")
             exit(1)
         
         click.echo("✅ Elasticsearch is healthy")

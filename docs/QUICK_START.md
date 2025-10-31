@@ -56,13 +56,13 @@ python -m recipes.client batch data/raw/recipes.csv 1 10
 
 ```bash
 # Start all services
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 
 # View worker logs
-docker-compose -f docker-compose.python.yml logs -f recipes-worker
+docker-compose logs -f recipes-worker
 
 # Stop services
-docker-compose -f docker-compose.python.yml down
+docker-compose down
 ```
 
 ## 🧪 Testing Your Setup
@@ -167,7 +167,7 @@ source activate.sh
 
 **Solution**: Start database services
 ```bash
-docker-compose -f docker-compose.python.yml up -d postgres
+docker-compose up -d postgres
 ./recipes test-db
 ```
 

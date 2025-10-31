@@ -49,10 +49,10 @@ AI-powered recipe data parser and analyzer - Python version with Temporal workfl
 4. **Start services**:
    ```bash
    # Start PostgreSQL, Temporal, and other services
-   docker-compose -f docker-compose.python.yml up -d postgres temporal
+   docker-compose up -d postgres temporal
    
    # Or start all services
-   docker-compose -f docker-compose.python.yml up -d
+   docker-compose up -d
    ```
 
 ### Basic Usage
@@ -199,13 +199,13 @@ ruff src/ tests/
 
 ```bash
 # Start all services
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 
 # Start specific services
-docker-compose -f docker-compose.python.yml up -d postgres temporal
+docker-compose up -d postgres temporal
 
 # View logs
-docker-compose -f docker-compose.python.yml logs -f recipes-worker
+docker-compose logs -f recipes-worker
 ```
 
 ### Services

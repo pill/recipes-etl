@@ -159,6 +159,7 @@ Thumbs.db
 # Logs
 logs/
 *.log
+worker.log
 
 # Node.js / TypeScript (for client directory)
 client/node_modules/

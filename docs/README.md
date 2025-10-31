@@ -37,7 +37,7 @@ Welcome to the Recipes ETL documentation! This directory contains all project do
 ```bash
 # Start the project
 source activate.sh
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 
 # Process recipes
 python -m recipes.client batch-parallel data/raw/recipes.csv 1 100 20

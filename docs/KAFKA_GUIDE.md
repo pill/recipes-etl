@@ -33,7 +33,7 @@ Kafka enables decoupled, scalable recipe data processing:
 
 ```bash
 # Start Kafka (includes Zookeeper and Kafka UI)
-docker-compose -f docker-compose.python.yml up -d zookeeper kafka kafka-ui
+docker-compose up -d zookeeper kafka kafka-ui
 
 # Verify Kafka is running
 docker ps | grep kafka
@@ -77,7 +77,7 @@ KAFKA_CONSUMER_GROUP=recipe-processors
 
 ### Docker Services
 
-Three Kafka-related services are configured in `docker-compose.python.yml`:
+Three Kafka-related services are configured in `docker-compose.yml`:
 
 1. **Zookeeper** (port 2181) - Kafka coordination
 2. **Kafka** (ports 9092, 29092) - Message broker
@@ -241,7 +241,7 @@ kafka_service.consume_recipes(callback=process_recipe)
 
 ```bash
 # 1. Start all services
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 
 # 2. Start scraper (publish to Kafka)
 ./COMMANDS.sh scrape-kafka --continuous --interval 600 &
@@ -269,7 +269,7 @@ lsof -i :9092
 lsof -i :2181
 
 # Restart services
-docker-compose -f docker-compose.python.yml restart zookeeper kafka
+docker-compose restart zookeeper kafka
 ```
 
 ### No Messages Being Consumed

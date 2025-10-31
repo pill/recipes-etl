@@ -88,7 +88,7 @@ recipes-etl/
 ├── infra/                         # 🏗️ Infrastructure
 │   ├── docker/
 │   │   ├── Dockerfile.worker
-│   │   └── docker-compose.python.yml
+│   │   └── docker-compose.yml
 │   └── k8s/                       # NEW: If you scale up
 │
 ├── .github/                       # 🔄 CI/CD (NEW)
@@ -139,7 +139,7 @@ mv tests/schemas/*.test.js tests/typescript/schemas/
 ### Phase 4: Infrastructure (Low Risk)
 ```bash
 mkdir -p infra/docker
-mv docker-compose.python.yml infra/docker/
+mv docker-compose.yml infra/docker/
 mv Dockerfile.worker infra/docker/
 ```
 

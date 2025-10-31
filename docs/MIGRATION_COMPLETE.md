@@ -57,7 +57,7 @@ nano .env
 ### 4. Start Services
 ```bash
 # Start database and Temporal
-docker-compose -f docker-compose.python.yml up -d postgres temporal
+docker-compose up -d postgres temporal
 
 # Start worker
 source venv/bin/activate
@@ -142,7 +142,7 @@ recipes-python/
 ├── tests/                  # Test suite
 ├── scripts/               # Utility scripts
 ├── data/                  # Data directories
-├── docker-compose.python.yml  # Docker configuration
+├── docker-compose.yml         # Docker configuration
 ├── pyproject.toml         # Poetry configuration
 ├── requirements.txt       # Pip dependencies
 └── README_PYTHON.md       # Documentation

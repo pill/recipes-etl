@@ -1,6 +1,6 @@
-# Recipes (Python)
+# Recipe ETL pipeline
 
-AI-powered recipe data parser and analyzer - now in Python with Temporal workflows!
+AI-powered recipe data parser and analyzer (Temporal, Kafka, Postgres, Elasticsearch)
 
 ## 📊 Datasets
 
@@ -14,7 +14,7 @@ AI-powered recipe data parser and analyzer - now in Python with Temporal workflo
 
 ```bash
 # Install and setup
-python3 install.py
+python3 scripts/setup/install.py
 
 # Activate virtual environment
 source venv/bin/activate
@@ -24,14 +24,14 @@ cp env.example .env
 # Edit .env with your API keys
 
 # Start services
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 ```
 
 ### Test Setup
 
 ```bash
 # Test Python setup
-python test_setup.py
+python scripts/setup/test_setup.py
 
 # Test database connection
 python -m recipes.cli test-db
@@ -73,7 +73,7 @@ cat data/stage/entry_5.json
 
 ### Transform Multiple Recipes (Temporal Workflows - Recommended)
 
-**Prerequisites:** Install and start Temporal server (see [TEMPORAL_GUIDE.md](./TEMPORAL_GUIDE.md))
+**Prerequisites:** Install and start Temporal server (see [TEMPORAL_GUIDE.md](./docs/TEMPORAL_GUIDE.md))
 
 **With AI (slower, costs money):**
 ```bash
@@ -114,16 +114,16 @@ For large datasets, use the comprehensive `process_and_load.py` script:
 
 ```bash
 # Process and load Stromberg dataset (13,389 files) - local parsing
-python process_and_load.py stromberg --local --batch-size 1000
+python scripts/processing/process_and_load.py stromberg --local --batch-size 1000
 
 # Process and load Reddit CSVs - local parsing  
-python process_and_load.py reddit --local --batch-size 500
+python scripts/processing/process_and_load.py reddit --local --batch-size 500
 
 # Process single CSV file
-python process_and_load.py csv data/raw/Reddit_Recipes.csv --local --batch-size 100
+python scripts/processing/process_and_load.py csv data/raw/Reddit_Recipes.csv --local --batch-size 100
 
 # Load existing JSON files only
-python process_and_load.py load-only --batch-size 1000
+python scripts/processing/process_and_load.py load-only --batch-size 1000
 ```
 
 This script automatically:
@@ -151,7 +151,7 @@ This script automatically:
 - Monitor progress in Temporal Web UI (http://localhost:8081)
 - Scale with multiple workers
 
-See [TEMPORAL_GUIDE.md](./TEMPORAL_GUIDE.md) for complete documentation.
+See [TEMPORAL_GUIDE.md](./docs/TEMPORAL_GUIDE.md) for complete documentation.
 
 ### Load Recipe JSON into Database
 
@@ -269,7 +269,7 @@ For scalable, event-driven recipe collection, use Kafka:
 
 ```bash
 # 1. Start Kafka services
-docker-compose -f docker-compose.python.yml up -d zookeeper kafka kafka-ui
+docker-compose up -d zookeeper kafka kafka-ui
 
 # 2. Scrape and publish to Kafka (producer)
 ./COMMANDS.sh scrape-kafka --continuous --interval 300
@@ -294,7 +294,7 @@ Enable full-text search and recommendations:
 
 ```bash
 # 1. Start Elasticsearch and Kibana
-docker-compose -f docker-compose.python.yml up -d elasticsearch kibana
+docker-compose up -d elasticsearch kibana
 
 # 2. Wait ~30 seconds for Elasticsearch to be ready
 
@@ -315,15 +315,15 @@ curl "http://localhost:9200/recipes/_search?q=chicken&pretty"
 curl "http://localhost:9200/recipes/_count?pretty"
 ```
 
-See [ELASTICSEARCH_GUIDE.md](./ELASTICSEARCH_GUIDE.md) for complete search documentation.
+See [ELASTICSEARCH_GUIDE.md](./docs/ELASTICSEARCH_GUIDE.md) for complete search documentation.
 
 ---
 
 **📚 Complete Documentation**:
-- [TEMPORAL_GUIDE.md](./TEMPORAL_GUIDE.md) - Workflow orchestration guide
-- [README_PYTHON.md](./README_PYTHON.md) - Detailed Python documentation
-- [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md) - TypeScript to Python migration
-- [MIGRATION_COMPLETE.md](./MIGRATION_COMPLETE.md) - Migration summary
+- [TEMPORAL_GUIDE.md](./docs/TEMPORAL_GUIDE.md) - Workflow orchestration guide
+- [README_PYTHON.md](./docs/README_PYTHON.md) - Detailed Python documentation
+- [MIGRATION_GUIDE.md](./docs/MIGRATION_GUIDE.md) - TypeScript to Python migration
+- [MIGRATION_COMPLETE.md](./docs/MIGRATION_COMPLETE.md) - Migration summary
 
 ## 🛠️ Tech Stack
 
@@ -343,7 +343,7 @@ See [ELASTICSEARCH_GUIDE.md](./ELASTICSEARCH_GUIDE.md) for complete search docum
 - **Redis** - Caching (future)
 
 ### Frontend (Separate)
-- **React + TypeScript** - Modern web frontend (`client/recipe-client/`)
+- **React + TypeScript** - Modern web frontend (`client/`)
 - **Vite** - Build tool
 
 ## 📋 CLI Commands
@@ -379,7 +379,7 @@ python -m recipes.client batch-parallel <csv> <start> <end> <batch-size>
 
 ### Start All Services
 ```bash
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 ```
 
 This starts:
@@ -393,16 +393,16 @@ This starts:
 ### Service-Specific Commands
 ```bash
 # Start only database
-docker-compose -f docker-compose.python.yml up -d postgres
+docker-compose up -d postgres
 
 # Start Temporal stack
-docker-compose -f docker-compose.python.yml up -d temporal temporal-ui
+docker-compose up -d temporal temporal-ui
 
 # View worker logs
-docker-compose -f docker-compose.python.yml logs -f recipes-worker
+docker-compose logs -f recipes-worker
 
 # Stop all services
-docker-compose -f docker-compose.python.yml down
+docker-compose down
 ```
 
 ## 🏗️ Architecture
@@ -418,7 +418,7 @@ docker-compose -f docker-compose.python.yml down
 ### Project Structure
 
 ```
-recipes-python/
+recipes-etl/
 ├── src/recipes/              # Main Python package
 │   ├── models/              # Pydantic data models
 │   ├── services/            # Business logic (AI, DB, Search, Reddit)
@@ -430,8 +430,8 @@ recipes-python/
 ├── tests/                   # Test suite
 ├── scripts/                 # Setup & utility scripts
 ├── data/                    # Data directories
-├── client/recipe-client/    # React frontend (separate)
-└── docker-compose.python.yml # Docker configuration
+├── client/                  # React frontend (separate)
+└── docker-compose.yml       # Docker configuration
 ```
 
 ## 🔄 Workflows
@@ -472,6 +472,15 @@ ruff src/ tests/
 # Type checking
 mypy src/
 ```
+
+### Maintenance Scripts
+
+```bash
+# Clean up legacy JSON files (without UUIDs)
+./scripts/cleanup/delete_legacy_json_files.sh
+```
+
+This script helps maintain data consistency by removing old `entry_*.json` files that don't follow the UUID naming convention.
 
 ## 📈 Version History
 
@@ -522,7 +531,7 @@ source venv/bin/activate
 
 **Database connection failed:**
 ```bash
-docker-compose -f docker-compose.python.yml up -d postgres
+docker-compose up -d postgres
 python -m recipes.cli test-db
 ```
 
@@ -534,18 +543,18 @@ python -m recipes.cli test-ai
 
 **Temporal worker not starting:**
 ```bash
-docker-compose -f docker-compose.python.yml up -d temporal
-docker-compose -f docker-compose.python.yml logs temporal
+docker-compose up -d temporal
+docker-compose logs temporal
 ```
 
 ### Getting Help
 
-- Check logs: `docker-compose -f docker-compose.python.yml logs -f`
+- Check logs: `docker-compose logs -f`
 - Run tests: `pytest tests/`
 - Review documentation: [docs/](./docs/)
 - Quick start: [docs/QUICK_START.md](./docs/QUICK_START.md)
 - Temporal workflows: [docs/TEMPORAL_GUIDE.md](./docs/TEMPORAL_GUIDE.md)
-- Code guidelines: [docs/AGENTS.md](./docs/AGENTS.md)
+- Code guidelines: [AGENTS.md](./AGENTS.md)
 
 ## 📄 License
 
@@ -568,7 +577,7 @@ All project documentation is now organized in the [`docs/`](./docs/) directory:
 - **[Temporal Guide](./docs/TEMPORAL_GUIDE.md)** - Workflow setup and usage
 - **[Elasticsearch Guide](./docs/ELASTICSEARCH_GUIDE.md)** - Search setup and queries
 - **[Pipeline Examples](./docs/PIPELINE_EXAMPLE.md)** - Processing examples
-- **[Code Guidelines](./docs/AGENTS.md)** - Style and testing standards
+- **[Code Guidelines](./AGENTS.md)** - Style and testing standards
 - **[Migration Notes](./docs/MIGRATION_COMPLETE.md)** - TypeScript to Python migration
 
 See [docs/README.md](./docs/README.md) for the complete documentation index.

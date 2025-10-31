@@ -10,6 +10,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    command: postgres -c max_connections=200 -c shared_buffers=256MB
     ports:
       - "5432:5432"
     volumes:
@@ -85,6 +86,120 @@ services:
     networks:
       - reddit-recipes-network
 
+  # Temporal server
+  temporal:
+    image: temporalio/auto-setup:1.20.0
+    container_name: recipes-temporal
+    restart: unless-stopped
+    ports:
+      - "7233:7233"
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PWD=postgres
+      - POSTGRES_SEEDS=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - reddit-recipes-network
+
+  # Temporal Web UI
+  temporal-ui:
+    image: temporalio/ui:2.26.0
+    container_name: recipes-temporal-ui
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      - temporal
+    networks:
+      - reddit-recipes-network
+
+  # Kafka for event streaming
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: recipes-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - reddit-recipes-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: recipes-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - reddit-recipes-network
+
+  # Kafka UI for monitoring (optional but recommended)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: recipes-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8082:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: recipes-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - reddit-recipes-network
+
+  # Python recipes worker (commented out - run locally with: python -m recipes.worker)
+  # recipes-worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.worker
+  #   container_name: recipes-worker
+  #   restart: unless-stopped
+  #   environment:
+  #     - DB_HOST=postgres
+  #     - DB_PORT=5432
+  #     - DB_NAME=recipes
+  #     - DB_USER=postgres
+  #     - DB_PASSWORD=postgres
+  #     - TEMPORAL_HOST=temporal
+  #     - TEMPORAL_PORT=7233
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+  #   volumes:
+  #     - ./data:/app/data
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     - temporal
+  #   networks:
+  #     - reddit-recipes-network
+
 volumes:
   postgres_data:
     driver: local
@@ -96,3 +211,4 @@ volumes:
 networks:
   reddit-recipes-network:
     driver: bridge
+

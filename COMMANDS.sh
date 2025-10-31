@@ -32,19 +32,19 @@ case "$1" in
         python3 "$PROJECT_ROOT/scripts/setup/check-db.py"
         ;;
     start)
-        docker-compose -f "$PROJECT_ROOT/docker-compose.python.yml" up -d
+        docker-compose -f "$PROJECT_ROOT/docker-compose.yml" up -d
         ;;
     stop)
-        docker-compose -f "$PROJECT_ROOT/docker-compose.python.yml" down
+        docker-compose -f "$PROJECT_ROOT/docker-compose.yml" down
         ;;
     restart)
-        docker-compose -f "$PROJECT_ROOT/docker-compose.python.yml" restart
+        docker-compose -f "$PROJECT_ROOT/docker-compose.yml" restart
         ;;
     logs)
-        docker-compose -f "$PROJECT_ROOT/docker-compose.python.yml" logs -f
+        docker-compose -f "$PROJECT_ROOT/docker-compose.yml" logs -f
         ;;
     ps)
-        docker-compose -f "$PROJECT_ROOT/docker-compose.python.yml" ps
+        docker-compose -f "$PROJECT_ROOT/docker-compose.yml" ps
         ;;
     worker)
         cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/runners/run_worker.py

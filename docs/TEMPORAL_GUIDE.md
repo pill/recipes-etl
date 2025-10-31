@@ -37,10 +37,10 @@ Using Docker (recommended):
 
 ```bash
 # Start Temporal using the Python Docker Compose
-docker-compose -f docker-compose.python.yml up -d temporal temporal-ui
+docker-compose up -d temporal temporal-ui
 
 # Or start all services including database
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 ```
 
 Or using Temporal CLI:
@@ -316,10 +316,10 @@ Track database loading:
 **Solution:**
 ```bash
 # Check if Temporal is running
-docker-compose -f docker-compose.python.yml ps
+docker-compose ps
 
 # Start Temporal if needed
-docker-compose -f docker-compose.python.yml up -d temporal temporal-ui
+docker-compose up -d temporal temporal-ui
 ```
 
 ### Rate limit errors (AI processing)
@@ -338,7 +338,7 @@ python -m recipes.client batch-local data/raw/recipes.csv 1 100
 **Solution:**
 ```bash
 # Check worker logs
-docker-compose -f docker-compose.python.yml logs recipes-worker
+docker-compose logs recipes-worker
 
 # Verify Temporal connection
 python -m recipes.cli test-db
@@ -383,13 +383,13 @@ Run everything in Docker:
 
 ```bash
 # Start all services (database, Temporal, worker)
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 
 # View worker logs
-docker-compose -f docker-compose.python.yml logs -f recipes-worker
+docker-compose logs -f recipes-worker
 
 # Check services status
-docker-compose -f docker-compose.python.yml ps
+docker-compose ps
 ```
 
 ## Advanced: Multiple Workers
@@ -436,7 +436,7 @@ python3 install.py
 source venv/bin/activate
 
 # Start services
-docker-compose -f docker-compose.python.yml up -d
+docker-compose up -d
 
 # Start worker
 python -m recipes.worker
