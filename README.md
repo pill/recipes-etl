@@ -205,13 +205,13 @@ Monitor Reddit for new recipes and save them to CSV:
 ```bash
 # Scrape once (run immediately and exit)
 source venv/bin/activate
-./COMMANDS.sh scrape --subreddit recipes --limit 50
+./CMD.sh scrape --subreddit recipes --limit 50
 
 # Monitor continuously (check every 5 minutes)
-./COMMANDS.sh scrape-continuous --interval 300
+./CMD.sh scrape-continuous --interval 300
 
 # Scrape from different subreddit
-./COMMANDS.sh scrape --subreddit cooking --limit 25
+./CMD.sh scrape --subreddit cooking --limit 25
 
 # Output saved to: data/raw/Reddit_recipes_scraped.csv
 ```
@@ -237,21 +237,21 @@ Run the scraper automatically every 5 minutes using Temporal Schedules - better 
 
 ```bash
 # 1. Start services and worker
-./COMMANDS.sh start
-./COMMANDS.sh worker
+./CMD.sh start
+./CMD.sh worker
 
 # 2. Create schedule (runs every 5 minutes)
-./COMMANDS.sh schedule create --interval 5
+./CMD.sh schedule create --interval 5
 
 # 3. Monitor in Temporal UI
 open http://localhost:8081/schedules
 
 # Manage schedule
-./COMMANDS.sh schedule pause      # Pause scraping
-./COMMANDS.sh schedule unpause    # Resume scraping
-./COMMANDS.sh schedule trigger    # Run immediately
-./COMMANDS.sh schedule describe   # View status
-./COMMANDS.sh schedule delete     # Remove schedule
+./CMD.sh schedule pause      # Pause scraping
+./CMD.sh schedule unpause    # Resume scraping
+./CMD.sh schedule trigger    # Run immediately
+./CMD.sh schedule describe   # View status
+./CMD.sh schedule delete     # Remove schedule
 ```
 
 **Benefits:**
@@ -272,10 +272,10 @@ For scalable, event-driven recipe collection, use Kafka:
 docker-compose up -d zookeeper kafka kafka-ui
 
 # 2. Scrape and publish to Kafka (producer)
-./COMMANDS.sh scrape-kafka --continuous --interval 300
+./CMD.sh scrape-kafka --continuous --interval 300
 
 # 3. Consume and process events (consumer)
-./COMMANDS.sh kafka-consumer --save-csv
+./CMD.sh kafka-consumer --save-csv
 
 # Monitor at: http://localhost:8082 (Kafka UI)
 ```
@@ -316,6 +316,35 @@ curl "http://localhost:9200/recipes/_count?pretty"
 ```
 
 See [ELASTICSEARCH_GUIDE.md](./docs/ELASTICSEARCH_GUIDE.md) for complete search documentation.
+
+### React Client (Web UI)
+
+Explore and search recipes with a modern web interface:
+
+```bash
+# Start the React client
+cd client
+npm install
+npm run dev
+
+# Access at: http://localhost:5173
+```
+
+**Features:**
+- 🎲 **Random Recipe** - Discover random recipes
+- 🔍 **Full-Text Search** - Search by keywords using Elasticsearch
+- 🏷️ **UUID Search** - Look up specific recipes by UUID (perfect for debugging!)
+- 🥘 **Ingredient Search** - Filter by ingredients
+- ⚡ **Quick & Easy** - Find fast recipes
+- 🌍 **Cuisine Analysis** - Analyze recipes by cuisine
+
+**UUID Search Use Cases:**
+- Track recipes through the ETL pipeline
+- Debug UUID changes after reprocessing
+- Compare different versions of the same recipe
+- Direct recipe lookups for debugging
+
+Example: Search for `8faa4a5f-4f52-56db-92aa-fa574ed6b62c` to see full recipe details.
 
 ---
 

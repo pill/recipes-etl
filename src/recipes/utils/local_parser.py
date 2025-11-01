@@ -48,22 +48,35 @@ class LocalRecipeParser:
         description = self._extract_description(lines, text)
         
         # Extract ingredients - try multiple methods
-        ingredients = self._extract_ingredients_robust(text, lines)
+        ingredients_raw = self._extract_ingredients_robust(text, lines)
+        
+        # Track if we found any ingredients before filtering
+        found_ingredients_section = len(ingredients_raw) > 0
+        
+        # Filter out instruction-like ingredients and section headers (always apply)
+        if ingredients_raw:
+            ingredients = self._filter_bad_ingredients(ingredients_raw)
+        else:
+            ingredients = []
         
         # Extract instructions - try multiple methods  
         instructions = self._extract_instructions_robust(text, lines)
         
-        # If we didn't get good ingredients/instructions, try lenient extraction
-        if not ingredients or len(ingredients) == 0:
+        # Only use lenient extraction if we didn't find an ingredients section at all
+        # Don't use it if we found ingredients but they were all filtered out (those were bad data)
+        if not ingredients and not found_ingredients_section:
             ingredients = self._extract_ingredients_lenient(text, lines)
-            
-            if not ingredients:
-                # Last resort: create a single placeholder
-                ingredients = [RecipeIngredientSchema(
-                    item="Ingredients listed in recipe text",
-                    amount="See recipe",
-                    notes=None
-                )]
+            # Apply filtering to lenient results too
+            if ingredients:
+                ingredients = self._filter_bad_ingredients(ingredients)
+        
+        # If still no ingredients (either filtered out or never found), add placeholder
+        if not ingredients:
+            ingredients = [RecipeIngredientSchema(
+                item="Ingredients listed in recipe text",
+                amount="See recipe",
+                notes=None
+            )]
         
         if not instructions or len(instructions) == 0:
             instructions = self._extract_instructions_lenient(text, lines)
@@ -590,12 +603,36 @@ class LocalRecipeParser:
         if match:
             ingredient_text = match.group(1).strip()
             
-            # Split by numbered items (1. 2. 3.) or bullet points (* - •)
-            # This works whether items are on separate lines or same line
-            ingredient_items = re.split(r'\d+\.\s+|[\*\-•]\s+', ingredient_text)
+            # First, expand embedded newlines (for cases where ingredients are in one blob)
+            # Replace \n\n with actual newlines to split properly
+            ingredient_text = ingredient_text.replace('\\n\\n', '\n').replace('\\n', '\n')
             
-            # Remove empty items and the first item if it's just whitespace/header
+            # Try to split on newlines first (most common format)
+            ingredient_items = ingredient_text.split('\n')
             ingredient_items = [item.strip() for item in ingredient_items if item.strip()]
+            
+            # If we only got 1 item, try splitting on bullet points / numbered lists
+            if len(ingredient_items) <= 1:
+                # Split by numbered items (1. 2. 3.) or bullet points (* - • ・)
+                # Note: Added ・ (Japanese bullet point commonly used in Asian recipes)
+                ingredient_items = re.split(r'\d+\.\s+|[\*\-•・]\s*', ingredient_text)
+                ingredient_items = [item.strip() for item in ingredient_items if item.strip()]
+            
+            # Additional splitting on double newlines (paragraph breaks)
+            expanded_items = []
+            for item in ingredient_items:
+                # Split on double newlines or \n\n patterns
+                sub_items = re.split(r'\n\n+', item)
+                for sub in sub_items:
+                    # Also split on Japanese bullet points within the text
+                    if '・' in sub:
+                        mini_items = re.split(r'・\s*', sub)
+                        expanded_items.extend([m.strip() for m in mini_items if m.strip()])
+                    else:
+                        if sub.strip():
+                            expanded_items.append(sub.strip())
+            
+            ingredient_items = expanded_items
             
             for item in ingredient_items:
                 item = item.strip()
@@ -603,7 +640,21 @@ class LocalRecipeParser:
                     continue
                 
                 # Skip if it looks like a section header
-                if item.lower() in ['ingredients', 'ingredient list', 'what you need']:
+                item_lower = item.lower()
+                if item_lower in ['ingredients', 'ingredient list', 'what you need']:
+                    continue
+                
+                # Skip serving size notes like "(Serves 2)"
+                if re.match(r'^\(serves?\s+\d+\)', item_lower):
+                    continue
+                
+                # Skip section headers like "For the Cookies:", "For Topping:"
+                if item_lower.startswith('for the ') or item_lower.startswith('for '):
+                    if len(item) < 50 and (':' in item or item.count(' ') < 4):
+                        continue
+                
+                # Skip standalone notes
+                if item_lower in ['to taste', 'optional', 'as needed', 'if desired']:
                     continue
                 
                 # Skip if it's weirdly short (probably parsing error)
@@ -684,6 +735,62 @@ class LocalRecipeParser:
         # Fall back to line-based extraction
         return self._extract_instructions_improved(text, lines)
     
+    def _filter_bad_ingredients(self, ingredients: List[RecipeIngredientSchema]) -> List[RecipeIngredientSchema]:
+        """Filter out ingredients that are actually instructions, section headers, or notes."""
+        filtered = []
+        
+        for ing in ingredients:
+            item = ing.item.strip()
+            item_lower = item.lower()
+            
+            # Skip if empty
+            if not item or len(item) < 3:
+                continue
+            
+            # Skip serving size notes like "(Serves 2)"
+            if re.match(r'^\(serves?\s+\d+\)', item_lower):
+                continue
+            
+            # Skip section headers like "For the Cookies", "For Topping", "For Filling"
+            if item_lower.startswith('for the ') or item_lower.startswith('for '):
+                # If it's short and doesn't have quantity/measurement words, it's likely a header
+                has_quantity = any(word in item_lower for word in ['cup', 'tbsp', 'tsp', 'oz', 'lb', 'gram', 'ml', 'liter'])
+                has_number = any(char.isdigit() for char in item)
+                if len(item) < 50 and not has_quantity and not has_number:
+                    continue
+            
+            # Skip standalone notes
+            if item_lower in ['to taste', 'optional', 'as needed', 'if desired', '(optional)', 'for garnish']:
+                continue
+            
+            # Skip if starts with instruction verb or phrase
+            instruction_verbs = ['coat', 'sift', 'strain', 'fill', 'toss', 'serve', 'mix', 
+                               'stir', 'cook', 'bake', 'heat', 'pour', 'bring', 'combine',
+                               'transfer', 'place', 'remove', 'set', 'cover', 'let', 'allow',
+                               'preheat', 'add', 'blend', 'whisk', 'beat', 'fold']
+            
+            first_word = item.split()[0].lower() if item.split() else ''
+            if first_word in instruction_verbs:
+                continue
+            
+            # Skip if starts with "in a" or "in the" (instruction phrase)
+            if item_lower.startswith('in a ') or item_lower.startswith('in the '):
+                continue
+            
+            # Skip if it's a long sentence with period and action verbs
+            if item.endswith('.') and len(item.split()) > 6:
+                if any(verb in item_lower for verb in instruction_verbs):
+                    continue
+            
+            # Skip if it contains "Instructions" header
+            if 'instructions' in item_lower and len(item) < 20:
+                continue
+            
+            # Keep the ingredient
+            filtered.append(ing)
+        
+        return filtered
+    
     def _parse_ingredient_smart(self, text: str) -> Optional[RecipeIngredientSchema]:
         """Smart ingredient parsing from a single text string."""
         if not text or len(text) > 200:
@@ -698,28 +805,40 @@ class LocalRecipeParser:
         if not text:
             return None
         
+        # Skip if it's just "(optional)" or similar notes
+        text_lower = text.lower()
+        if text_lower in ['(optional)', 'optional', 'to taste', 'as needed', 'if desired']:
+            return None
+        
         # Check if it's a section header (ends with colon and is short)
         if text.endswith(':') and len(text) < 50:
             # Common section headers
             section_markers = ['dough', 'sauce', 'topping', 'garnish', 'marinade', 'filling', 
                              'crust', 'batter', 'glaze', 'syrup', 'broth', 'base', 'layer']
-            text_lower = text[:-1].lower()  # Remove colon for checking
-            if any(marker in text_lower for marker in section_markers):
+            text_lower_no_colon = text[:-1].lower()  # Remove colon for checking
+            if any(marker in text_lower_no_colon for marker in section_markers):
                 return None
             # Generic short text ending in colon is likely a header
             if len(text) < 30:
                 return None
         
         # Check if text looks like an instruction rather than an ingredient
-        instruction_verbs = ['cook', 'add', 'mix', 'stir', 'deglaze', 'fix', 'serve', 'place',
-                            'heat', 'pour', 'bring', 'reduce', 'simmer', 'bake', 'remove',
-                            'set', 'cover', 'wait', 'let', 'transfer', 'combine', 'whisk',
-                            'beat', 'fold', 'knead', 'roll', 'cut', 'chop', 'slice', 'dice']
+        instruction_verbs = ['coat', 'sift', 'strain', 'cook', 'add', 'mix', 'stir', 'deglaze', 
+                            'fix', 'serve', 'place', 'heat', 'pour', 'bring', 'reduce', 'simmer', 
+                            'bake', 'remove', 'set', 'cover', 'wait', 'let', 'transfer', 'combine', 
+                            'whisk', 'beat', 'fold', 'knead', 'roll', 'cut', 'chop', 'slice', 'dice',
+                            'fill', 'toss']
         
         first_word = text.split()[0].lower() if text.split() else ""
         if first_word in instruction_verbs:
             # This looks like an instruction, not an ingredient
             return None
+        
+        # Check for instruction-like sentences (long, ends with period, has action verbs)
+        if text.endswith('.') and len(text.split()) > 6:
+            # Contains imperative verbs - likely an instruction
+            if any(verb in text_lower for verb in instruction_verbs):
+                return None
         
         # Skip section headers in text
         text_lower = text.lower()
@@ -774,8 +893,37 @@ class LocalRecipeParser:
                 elif len(groups) == 3:
                     # Has amount, unit, and item: "2 cups flour"
                     amount, unit, item = groups
-                    amount_str = f"{amount.strip()} {unit.strip()}"
-                    item_str = item.strip()
+                    
+                    # Check if "unit" is actually an ingredient name (capitalized, not a standard unit)
+                    # Pattern like "1 Eggplant cut into cubes" or "2 Garlic cloves minced"
+                    unit_lower = unit.strip().lower()
+                    standard_units = ['cup', 'cups', 'c', 'tbsp', 'tsp', 'tablespoon', 'tablespoons', 
+                                     'teaspoon', 'teaspoons', 'oz', 'ounce', 'ounces', 'lb', 'lbs',
+                                     'pound', 'pounds', 'g', 'gram', 'grams', 'kg', 'kilogram', 
+                                     'kilograms', 'ml', 'milliliter', 'milliliters', 'l', 'liter', 
+                                     'liters', 'quart', 'quarts', 'qt', 'pint', 'pints', 'pt',
+                                     'gallon', 'gallons', 'gal', 'clove', 'cloves', 'piece', 
+                                     'pieces', 'slice', 'slices', 'can', 'cans', 'jar', 'jars',
+                                     'package', 'packages', 'pkg', 'bunch', 'bunches', 'head',
+                                     'heads', 'stalk', 'stalks', 'sprig', 'sprigs', 'pinch', 'dash']
+                    
+                    if unit_lower not in standard_units and unit[0].isupper():
+                        # This is likely an ingredient name, not a unit
+                        # Pattern: "1 Eggplant cut into cubes" -> amount="1", item="Eggplant", notes="cut into cubes"
+                        amount_str = amount.strip()
+                        item_str = unit.strip()
+                        # The third group is prep notes
+                        notes = item.strip() if item.strip() else None
+                        if item_str and len(item_str) >= 2:
+                            return RecipeIngredientSchema(
+                                item=item_str,
+                                amount=amount_str,
+                                notes=notes
+                            )
+                    else:
+                        # Standard pattern: amount + unit + item
+                        amount_str = f"{amount.strip()} {unit.strip()}"
+                        item_str = item.strip()
                 else:
                     continue
                 
@@ -838,13 +986,22 @@ class LocalRecipeParser:
                 # Remove markdown bold markers
                 line = line.replace('**', '')
                 
-                # Remove bullet points and list markers (including markdown *)
-                line = re.sub(r'^[\*\-•]+\s*', '', line)
+                # Remove bullet points and list markers (including markdown * and ・)
+                line = re.sub(r'^[\*\-•・]+\s*', '', line)
                 line = re.sub(r'^\d+[\.)]\s*', '', line)
                 
                 # Skip if now empty
                 if not line or len(line) < 3:
                     continue
+                
+                # Skip section headers (no quantity/number indicators)
+                line_lower = line.lower()
+                if line_lower.startswith('for the ') or line_lower.startswith('for '):
+                    has_quantity = any(word in line_lower for word in ['cup', 'tbsp', 'tsp', 'oz', 'lb', 'gram', 'ml', 'liter'])
+                    has_number = any(char.isdigit() for char in line)
+                    if not has_quantity and not has_number:
+                        print(f"DEBUG: Skipping section header: {line}")
+                        continue
                 
                 # Try to parse as ingredient
                 ingredient = self._parse_ingredient_line_improved(line)
@@ -856,11 +1013,14 @@ class LocalRecipeParser:
             # Look for lines that match ingredient patterns
             for line in lines:
                 if self._is_ingredient_line(line):
-                    line = re.sub(r'^[\*\-•]\s*', '', line)
+                    line = re.sub(r'^[\*\-•・]\s*', '', line)
                     line = re.sub(r'^\d+\.\s*', '', line)
                     ingredient = self._parse_ingredient_line_improved(line)
                     if ingredient:
                         ingredients.append(ingredient)
+        
+        # Apply filtering to remove instructions/headers that slipped through
+        ingredients = self._filter_bad_ingredients(ingredients)
         
         return ingredients
     

@@ -5,8 +5,9 @@ import SearchRecipes from './components/SearchRecipes'
 import IngredientSearch from './components/IngredientSearch'
 import QuickRecipes from './components/QuickRecipes'
 import CuisineIngredients from './components/CuisineIngredients'
+import UuidSearch from './components/UuidSearch'
 
-type TabType = 'random' | 'search' | 'ingredients' | 'quick' | 'cuisine'
+type TabType = 'random' | 'search' | 'uuid' | 'ingredients' | 'quick' | 'cuisine'
 
 function App() {
   const [activeTab, setActiveTab] = useState<TabType>('random')
@@ -14,6 +15,7 @@ function App() {
   const tabs = [
     { id: 'random' as TabType, label: 'Random Recipe' },
     { id: 'search' as TabType, label: 'Full-Text Search' },
+    { id: 'uuid' as TabType, label: 'By UUID' },
     { id: 'ingredients' as TabType, label: 'By Ingredient' },
     { id: 'quick' as TabType, label: 'Quick & Easy' },
     { id: 'cuisine' as TabType, label: 'Cuisine Analysis' },
@@ -38,6 +40,7 @@ function App() {
       <div className="card">
         {activeTab === 'random' && <RandomRecipe />}
         {activeTab === 'search' && <SearchRecipes />}
+        {activeTab === 'uuid' && <UuidSearch />}
         {activeTab === 'ingredients' && <IngredientSearch />}
         {activeTab === 'quick' && <QuickRecipes />}
         {activeTab === 'cuisine' && <CuisineIngredients />}

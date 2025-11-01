@@ -18,23 +18,23 @@ Temporal Schedules are superior to cron jobs:
 
 ```bash
 # Start all services (including Temporal)
-./COMMANDS.sh start
+./CMD.sh start
 
 # Start Temporal worker
-./COMMANDS.sh worker
+./CMD.sh worker
 ```
 
 ### 2. Create Schedule (Every 5 Minutes)
 
 ```bash
 # Create schedule to run every 5 minutes
-./COMMANDS.sh schedule create
+./CMD.sh schedule create
 
 # Custom interval (every 10 minutes)
-./COMMANDS.sh schedule create --interval 10
+./CMD.sh schedule create --interval 10
 
 # Different subreddit
-./COMMANDS.sh schedule create --subreddit cooking --limit 50
+./CMD.sh schedule create --subreddit cooking --limit 50
 ```
 
 ### 3. Monitor in Temporal UI
@@ -50,7 +50,7 @@ Open http://localhost:8081/schedules to view:
 ### View Schedule Status
 
 ```bash
-./COMMANDS.sh schedule describe
+./CMD.sh schedule describe
 ```
 
 Output:
@@ -72,28 +72,28 @@ Recent runs:
 
 ```bash
 # Pause scraping temporarily
-./COMMANDS.sh schedule pause
+./CMD.sh schedule pause
 ```
 
 ### Resume Schedule
 
 ```bash
 # Resume after pause
-./COMMANDS.sh schedule unpause
+./CMD.sh schedule unpause
 ```
 
 ### Trigger Immediately
 
 ```bash
 # Run scraper right now (doesn't affect schedule)
-./COMMANDS.sh schedule trigger
+./CMD.sh schedule trigger
 ```
 
 ### Delete Schedule
 
 ```bash
 # Stop and remove the schedule
-./COMMANDS.sh schedule delete
+./CMD.sh schedule delete
 ```
 
 ## Advanced Usage
@@ -117,10 +117,10 @@ await create_schedule(
 
 ```bash
 # Create schedule for r/recipes (every 5 min)
-./COMMANDS.sh schedule create --schedule-id recipes-5min --subreddit recipes --interval 5
+./CMD.sh schedule create --schedule-id recipes-5min --subreddit recipes --interval 5
 
 # Create schedule for r/cooking (every 15 min)  
-./COMMANDS.sh schedule create --schedule-id cooking-15min --subreddit cooking --interval 15
+./CMD.sh schedule create --schedule-id cooking-15min --subreddit cooking --interval 15
 
 # List all schedules in Temporal UI
 open http://localhost:8081/schedules
@@ -164,16 +164,16 @@ await handle.backfill([
 
 ```bash
 # 1. Start all services
-./COMMANDS.sh start
+./CMD.sh start
 
 # 2. Start Temporal worker
-./COMMANDS.sh worker
+./CMD.sh worker
 
 # 3. Create schedule (scraper runs every 5 min, publishes to Kafka)
-./COMMANDS.sh schedule create --interval 5
+./CMD.sh schedule create --interval 5
 
 # 4. Start Kafka consumer (processes events from Kafka)
-./COMMANDS.sh kafka-consumer --save-csv
+./CMD.sh kafka-consumer --save-csv
 
 # 5. Monitor
 open http://localhost:8081/schedules        # Temporal schedules
@@ -240,11 +240,11 @@ Each schedule execution creates a workflow run:
 
 ```bash
 # Check schedule status
-./COMMANDS.sh schedule describe
+./CMD.sh schedule describe
 
 # Check if paused
 # If paused, unpause it
-./COMMANDS.sh schedule unpause
+./CMD.sh schedule unpause
 
 # Check worker is running
 # Worker must be running to execute workflows
@@ -255,10 +255,10 @@ ps aux | grep worker
 
 ```bash
 # Start worker in foreground (see logs)
-./COMMANDS.sh worker
+./CMD.sh worker
 
 # Or start in background
-nohup ./COMMANDS.sh worker > worker.log 2>&1 &
+nohup ./CMD.sh worker > worker.log 2>&1 &
 ```
 
 ### View Workflow Errors
@@ -276,10 +276,10 @@ open http://localhost:8081/workflows
 
 ```bash
 # Delete existing schedule first
-./COMMANDS.sh schedule delete
+./CMD.sh schedule delete
 
 # Then create new one
-./COMMANDS.sh schedule create --interval 5
+./CMD.sh schedule create --interval 5
 ```
 
 ## Comparison with Alternatives

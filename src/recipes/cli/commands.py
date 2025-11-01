@@ -142,6 +142,96 @@ async def _list_recipes(limit: int):
         exit(1)
 
 
+@main.command('get-by-uuid')
+@click.argument('uuid')
+def get_by_uuid(uuid: str):
+    """Get a recipe by its UUID."""
+    asyncio.run(_get_by_uuid(uuid))
+
+
+async def _get_by_uuid(uuid: str):
+    """Get recipe by UUID."""
+    try:
+        click.echo(f'🔍 Looking up recipe with UUID: {uuid}...')
+        recipe = await RecipeService.get_by_uuid(uuid)
+        
+        if not recipe:
+            click.echo('📭 No recipe found with that UUID')
+            return
+        
+        # Display recipe details
+        click.echo(f'\n📋 Recipe Found:')
+        click.echo(f'━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        click.echo(f'🆔 ID: {recipe.id}')
+        click.echo(f'🏷️  UUID: {recipe.uuid}')
+        click.echo(f'📝 Title: {recipe.title}')
+        
+        if recipe.description:
+            click.echo(f'\n📖 Description:')
+            click.echo(f'   {recipe.description}')
+        
+        # Time info
+        click.echo(f'\n⏱️  Timing:')
+        if recipe.prep_time_minutes:
+            click.echo(f'   Prep: {recipe.prep_time_minutes} min')
+        if recipe.cook_time_minutes:
+            click.echo(f'   Cook: {recipe.cook_time_minutes} min')
+        if recipe.total_time_minutes:
+            click.echo(f'   Total: {recipe.total_time_minutes} min')
+        
+        # Other metadata
+        if recipe.servings:
+            click.echo(f'👥 Servings: {recipe.servings}')
+        if recipe.difficulty:
+            click.echo(f'📊 Difficulty: {recipe.difficulty}')
+        if recipe.cuisine_type:
+            click.echo(f'🌍 Cuisine: {recipe.cuisine_type}')
+        if recipe.meal_type:
+            click.echo(f'🍽️  Meal Type: {recipe.meal_type}')
+        if recipe.dietary_tags:
+            click.echo(f'🏷️  Dietary Tags: {", ".join(recipe.dietary_tags)}')
+        
+        # Ingredients
+        if recipe.ingredients:
+            click.echo(f'\n🥘 Ingredients ({len(recipe.ingredients)}):')
+            for i, ing in enumerate(recipe.ingredients, 1):
+                amount_str = f'{ing.amount} ' if ing.amount else ''
+                measurement_str = f'{ing.measurement.name} ' if ing.measurement else ''
+                ingredient_str = ing.ingredient.name if ing.ingredient else 'Unknown'
+                notes_str = f' ({ing.notes})' if ing.notes else ''
+                click.echo(f'   {i}. {amount_str}{measurement_str}{ingredient_str}{notes_str}')
+        
+        # Instructions
+        if recipe.instructions:
+            click.echo(f'\n👨‍🍳 Instructions:')
+            if isinstance(recipe.instructions, list):
+                for i, step in enumerate(recipe.instructions, 1):
+                    click.echo(f'   {i}. {step}')
+            else:
+                click.echo(f'   {recipe.instructions}')
+        
+        # Source info
+        if recipe.source_url:
+            click.echo(f'\n🔗 Source: {recipe.source_url}')
+        
+        # Reddit info
+        if recipe.reddit_post_id:
+            click.echo(f'\n📱 Reddit Info:')
+            click.echo(f'   Post ID: {recipe.reddit_post_id}')
+            if recipe.reddit_author:
+                click.echo(f'   Author: u/{recipe.reddit_author}')
+            if recipe.reddit_score:
+                click.echo(f'   Score: {recipe.reddit_score}')
+            if recipe.reddit_comments_count:
+                click.echo(f'   Comments: {recipe.reddit_comments_count}')
+        
+        click.echo(f'━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+        
+    except Exception as e:
+        click.echo(f'❌ Error looking up recipe: {str(e)}')
+        exit(1)
+
+
 @main.command()
 @click.argument('search_term')
 @click.option('--limit', default=10, help='Number of results to show')
@@ -192,6 +282,117 @@ async def _stats():
     except Exception as e:
         click.echo(f"❌ Error getting statistics: {str(e)}")
         exit(1)
+
+
+@main.command('reload-recipe')
+@click.argument('uuid')
+@click.option('--json-dir', default='data/stage', help='Directory to search for JSON files (default: data/stage)')
+def reload_recipe(uuid: str, json_dir: str):
+    """Reload a recipe from JSON to DB to Elasticsearch by UUID."""
+    asyncio.run(_reload_recipe(uuid, json_dir))
+
+
+async def _reload_recipe(uuid: str, json_dir: str):
+    """Reload a recipe by UUID."""
+    import os
+    import glob
+    
+    es_service = None
+    try:
+        click.echo(f'🔍 Looking for recipe JSON with UUID: {uuid}...')
+        
+        # Search for JSON file with this UUID in all subdirectories
+        json_file = None
+        search_patterns = [
+            os.path.join(json_dir, f'{uuid}.json'),
+            os.path.join(json_dir, '*', f'{uuid}.json'),
+            os.path.join(json_dir, '*', '*', f'{uuid}.json'),
+        ]
+        
+        for pattern in search_patterns:
+            matches = glob.glob(pattern)
+            if matches:
+                json_file = matches[0]
+                break
+        
+        if not json_file:
+            click.echo(f'❌ No JSON file found for UUID: {uuid}')
+            click.echo(f'   Searched in: {json_dir}')
+            click.echo(f'   Expected filename: {uuid}.json')
+            exit(1)
+        
+        click.echo(f'✅ Found JSON file: {json_file}')
+        
+        # Load to database
+        click.echo(f'💾 Loading recipe to database...')
+        result = await load_json_to_db(json_file)
+        
+        if not result['success']:
+            click.echo(f'❌ Failed to load recipe to database: {result.get("error", "Unknown error")}')
+            exit(1)
+        
+        recipe_id = result.get('recipeId')
+        recipe_title = result.get('title', 'N/A')
+        
+        if result.get('alreadyExists'):
+            click.echo(f'ℹ️  Recipe already exists in database (updated)')
+        else:
+            click.echo(f'✅ Recipe loaded to database')
+        
+        click.echo(f'   ID: {recipe_id}')
+        click.echo(f'   Title: {recipe_title}')
+        click.echo(f'   UUID: {uuid}')
+        
+        # Sync to Elasticsearch
+        click.echo(f'🔄 Syncing recipe to Elasticsearch...')
+        es_service = await get_elasticsearch_service()
+        
+        # Health check
+        if not await es_service.health_check():
+            click.echo('⚠️  Elasticsearch is not healthy - skipping sync')
+            click.echo('💡 Start Elasticsearch with: docker-compose up -d elasticsearch')
+            exit(0)  # Exit successfully since DB load worked
+        
+        # Get the recipe from database by ID (not UUID, as UUID might have changed)
+        recipe = await RecipeService.get_by_id(recipe_id)
+        
+        if not recipe:
+            click.echo(f'⚠️  Recipe not found in database (ID: {recipe_id}) - cannot sync to Elasticsearch')
+            click.echo(f'   This is unexpected since the recipe was just loaded.')
+            exit(1)
+        
+        # Check if UUID changed
+        if recipe.uuid != uuid:
+            click.echo(f'⚠️  UUID changed during load!')
+            click.echo(f'   Expected: {uuid}')
+            click.echo(f'   Got:      {recipe.uuid}')
+            click.echo(f'   This happens when recipe content (title/ingredients) changed.')
+        
+        # Index to Elasticsearch
+        index_result = await es_service.bulk_index_recipes([recipe])
+        
+        if index_result['success'] > 0:
+            click.echo(f'✅ Recipe synced to Elasticsearch')
+        else:
+            click.echo(f'❌ Failed to sync recipe to Elasticsearch')
+            exit(1)
+        
+        click.echo(f'\n🎉 Recipe reload complete!')
+        click.echo(f'   📄 JSON: {json_file}')
+        click.echo(f'   💾 Database ID: {recipe_id}')
+        click.echo(f'   🔍 Elasticsearch: Indexed')
+        click.echo(f'   🏷️  Original UUID: {uuid}')
+        if recipe.uuid != uuid:
+            click.echo(f'   🏷️  Current UUID:  {recipe.uuid} (changed)')
+        
+    except Exception as e:
+        click.echo(f'❌ Error reloading recipe: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        exit(1)
+    finally:
+        if es_service:
+            await es_service.close()
 
 
 @main.command('sync-search')

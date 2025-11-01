@@ -263,53 +263,6 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
         from ..utils.ingredient_parser import get_ingredient_parser
         import re
         
-        # Handle old format (with entryNumber, metadata, recipeData wrapper)
-        if 'recipeData' in recipe_json:
-            recipe_json = recipe_json['recipeData']
-        
-        # Convert old ingredient format to new format if needed
-        if 'ingredients' in recipe_json and recipe_json['ingredients']:
-            converted_ingredients = []
-            for ing in recipe_json['ingredients']:
-                if 'name' in ing and 'item' not in ing:
-                    # Old format: {name, quantity, unit, notes}
-                    # New format: {item, amount, notes}
-                    quantity = ing.get('quantity', '')
-                    unit = ing.get('unit', '')
-                    amount_str = f"{quantity} {unit}".strip() if quantity or unit else "to taste"
-                    
-                    converted_ingredients.append({
-                        'item': ing.get('name', ''),
-                        'amount': amount_str,
-                        'notes': ing.get('notes')
-                    })
-                else:
-                    # Already in new format
-                    converted_ingredients.append(ing)
-            recipe_json['ingredients'] = converted_ingredients
-        
-        # Convert old instruction format if needed (already strings in old format)
-        if 'instructions' in recipe_json and recipe_json['instructions']:
-            if isinstance(recipe_json['instructions'][0], str):
-                # Old format: list of strings - convert to new format
-                converted_instructions = []
-                for idx, inst_str in enumerate(recipe_json['instructions'], 1):
-                    # Try to extract title from instruction string
-                    if ':' in inst_str and inst_str.index(':') < 50:
-                        parts = inst_str.split(':', 1)
-                        title = parts[0].strip()
-                        description = parts[1].strip()
-                    else:
-                        title = f"Step {idx}"
-                        description = inst_str
-                    
-                    converted_instructions.append({
-                        'step': idx,
-                        'title': title,
-                        'description': description
-                    })
-                recipe_json['instructions'] = converted_instructions
-        
         # Clean up <UNKNOWN> and null values for optional fields
         # Schema expects either None or a valid string, not "<UNKNOWN>"
         for field in ['prepTime', 'cookTime', 'chillTime', 'panSize', 'difficulty', 'cuisine', 'mealType']:
@@ -368,13 +321,51 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
             else:
                 instructions.append(inst.description)
         
+        # Pre-process ingredients to split multi-line blobs
+        # Some Kafka recipes have entire ingredient lists in one item with embedded newlines
+        expanded_ingredients = []
+        for ing_schema in recipe_schema.ingredients:
+            item = ing_schema.item
+            
+            # Check if this ingredient contains multiple lines or bullet points
+            if '\n' in item or '・' in item:
+                # Split on newlines and bullet points
+                sub_items = item.split('\n')
+                for sub in sub_items:
+                    sub = sub.strip()
+                    if not sub:
+                        continue
+                    # Further split on Japanese bullet points
+                    if '・' in sub:
+                        mini_items = sub.split('・')
+                        for mini in mini_items:
+                            mini = mini.strip()
+                            if mini and len(mini) > 2:
+                                from recipes.models.schemas import RecipeIngredientSchema
+                                expanded_ingredients.append(RecipeIngredientSchema(
+                                    item=mini,
+                                    amount=ing_schema.amount,
+                                    notes=ing_schema.notes
+                                ))
+                    else:
+                        if len(sub) > 2:
+                            from recipes.models.schemas import RecipeIngredientSchema
+                            expanded_ingredients.append(RecipeIngredientSchema(
+                                item=sub,
+                                amount=ing_schema.amount,
+                                notes=ing_schema.notes
+                            ))
+            else:
+                # Normal ingredient, keep as is
+                expanded_ingredients.append(ing_schema)
+        
         # Convert ingredients using the parser
         parser = get_ingredient_parser()
         recipe_ingredients = []
         skipped_count = 0
-        total_count = len(recipe_schema.ingredients)
+        total_count = len(expanded_ingredients)
         
-        for idx, ing_schema in enumerate(recipe_schema.ingredients):
+        for idx, ing_schema in enumerate(expanded_ingredients):
             # Skip malformed ingredients (entire recipe in one field)
             if len(ing_schema.item) > 500:
                 print(f"Warning: Skipping malformed ingredient (too long: {len(ing_schema.item)} chars)")
@@ -388,16 +379,25 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
                 'how to do it', 'directions*', 'instructions',
                 
                 # Cooking actions
-                'preheat the', 'in the meantime', 'cooking the', 'bake at', 'bake for',
+                'preheat', 'in the meantime', 'cooking the', 'bake at', 'bake for',
                 'blend everything', 'transfer to', 'mix the', 'place the', 'pour the', 
-                'take the', 'add the', 'stir', 'remove from', 'set aside', 'let sit',
+                'take the', 'add the', 'remove from', 'set aside', 'let sit',
                 'let it rest', 'allow it to', 'continue cooking', 'reduce heat',
-                'warm a', 'heat a', 'bring to a boil',
+                'warm a', 'heat a', 'bring to a boil', 'fill a', 'fill the',
                 
-                # Common instruction starters
+                # Serving and finishing
+                'serve with', 'toss to', 'toss and serve', 'combine then serve',
+                'garnish with', 'top and serve',
+                
+                # Common instruction starters (with space to avoid partial matches)
                 'rinse ', 'drain ', 'clean and', 'top with', 'cover with', 'line a',
                 'spread the', 'evenly spread', 'put crab', 'start by adding',
                 'you can find', 'if you', 'grease baking', 'stretch the',
+                'cook ', 'stir ',  # Added with space to avoid matching "cooked" or "stir-fry"
+                
+                # Section headers
+                'for the ', 'for filling', 'for topping', 'for garnish', 'for sauce',
+                'for dressing', 'for marinade', 'for glaze', 'for frosting',
                 
                 # Formatting/metadata
                 '[video]', '**[', 'recipe*', '&amp;x200b', 'optional as topping',
@@ -408,6 +408,29 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
             if any(pattern in item_lower for pattern in skip_patterns):
                 skipped_count += 1
                 continue
+            
+            # Skip standalone notes (just "to taste", "optional", etc.)
+            standalone_notes = ['to taste', 'optional', 'as needed', 'if desired', 'for garnish']
+            if ing_schema.item.strip().lower() in standalone_notes:
+                print(f"Warning: Skipping standalone note: '{ing_schema.item}'")
+                skipped_count += 1
+                continue
+            
+            # Skip if ingredient is just a single word and very short (likely noise)
+            if len(ing_schema.item.strip()) < 3 and not ing_schema.item.strip().isdigit():
+                skipped_count += 1
+                continue
+            
+            # Skip if it looks like a complete sentence (ends with period and contains action verbs)
+            if ing_schema.item.strip().endswith('.'):
+                # Check if it has multiple words and action verbs (likely an instruction)
+                words = ing_schema.item.split()
+                action_verbs = ['fill', 'toss', 'serve', 'mix', 'stir', 'cook', 'bake', 'heat', 
+                               'add', 'pour', 'place', 'combine', 'whisk', 'fold', 'cut', 'chop']
+                if len(words) > 5 and any(verb in item_lower for verb in action_verbs):
+                    print(f"Warning: Skipping instruction-like ingredient: '{ing_schema.item[:80]}'")
+                    skipped_count += 1
+                    continue
             
             # Skip ingredients with only formatting characters
             if not ing_schema.item.strip('*[]()- \n\t'):
@@ -505,19 +528,8 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
         # Check if UUID already exists in JSON (generated at JSON creation time)
         existing_uuid = recipe_json.get('uuid')
         
-        # Generate source_url for UUID if not provided
-        source_url_for_uuid = None
-        if recipe_ingredients:
-            # Create a fingerprint from first 5 ingredients
-            ingredient_fingerprint = '|'.join([
-                ing.ingredient.name[:50] if ing.ingredient else ''
-                for ing in recipe_ingredients[:5]
-            ])
-            import hashlib
-            fingerprint_hash = hashlib.md5(ingredient_fingerprint.encode()).hexdigest()[:8]
-            source_url_for_uuid = f"staged:{fingerprint_hash}"
-        
         # Create recipe (with truncation for database constraints)
+        # Note: UUID is now based on title only, not ingredients
         recipe = Recipe(
             uuid=existing_uuid,  # Use UUID from JSON if available
             title=recipe_schema.title[:500] if recipe_schema.title else "Untitled Recipe",
@@ -532,7 +544,7 @@ async def load_json_to_db(json_file_path: str) -> Dict[str, Any]:
             cuisine_type=recipe_schema.cuisine,
             meal_type=recipe_schema.mealType,
             dietary_tags=recipe_schema.dietaryTags,
-            source_url=source_url_for_uuid  # Use fingerprint-based URL for UUID generation
+            source_url=None  # No source URL for staged recipes
         )
         
         # Validate recipe data before attempting to create

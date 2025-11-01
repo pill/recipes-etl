@@ -12,7 +12,7 @@ UUIDs weren't in the staged JSON files (`data/stage/kafka_recipes/*.json`), only
 
 **Generate UUIDs deterministically during JSON creation**, not during database insertion.
 
-Since UUIDs are deterministic (based on title + ingredients), we can generate them as soon as we have the recipe data.
+Since UUIDs are deterministic (based on title + source_url), we can generate them as soon as we have the recipe data.
 
 ## What Changed
 
@@ -35,22 +35,18 @@ Since UUIDs are deterministic (based on title + ingredients), we can generate th
 
 ## Code Changes
 
-### 1. Updated `json_processor.py` (lines 39-51)
+### 1. Updated `json_processor.py`
 
 Added UUID generation during JSON creation:
 
 ```python
-# Generate deterministic UUID from ingredients
-ingredient_fingerprint = '|'.join([
-    ing.item[:50] for ing in recipe_data.ingredients[:5]
-])
-fingerprint_hash = hashlib.md5(ingredient_fingerprint.encode()).hexdigest()[:8]
-source_url = f"staged:{fingerprint_hash}"
-
-# Generate UUID
+# Generate deterministic UUID based on title only (not ingredients)
+# This ensures same title = same UUID, regardless of ingredient variations
 uuid = generate_recipe_uuid(recipe_data.title, source_url)
 recipe_dict['uuid'] = uuid
 ```
+
+**Note:** UUIDs are now based on **title only**, not ingredients. This simplifies UUID generation and makes recipes with the same title get the same UUID.
 
 ### 2. Updated `activities.py` (lines 505-522)
 

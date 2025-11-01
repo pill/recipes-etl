@@ -29,11 +29,7 @@ async def test_entry(json_path: str):
         print(f"Title: {data.get('title', 'N/A')}")
         
         # Try to validate against RecipeSchema
-        # First handle old format
-        if 'recipeData' in data:
-            recipe_data = data['recipeData']
-        else:
-            recipe_data = data
+        recipe_data = data
         
         # Apply the same transformations as in load_json_to_db
         # Handle time conversions

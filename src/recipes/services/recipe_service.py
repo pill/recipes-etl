@@ -140,6 +140,42 @@ class RecipeService:
             return RecipeService._map_db_rows_to_recipe(rows)
     
     @staticmethod
+    async def get_by_uuid(uuid: str) -> Optional[Recipe]:
+        """Get recipe by UUID."""
+        pool = await get_pool()
+        
+        query = """
+            SELECT 
+                r.*,
+                ri.id as recipe_ingredient_id,
+                ri.ingredient_id,
+                ri.measurement_id,
+                ri.amount,
+                ri.notes,
+                ri.order_index,
+                i.name as ingredient_name,
+                i.category as ingredient_category,
+                i.description as ingredient_description,
+                m.name as measurement_name,
+                m.abbreviation as measurement_abbreviation,
+                m.unit_type as measurement_unit_type
+            FROM recipes r
+            LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+            LEFT JOIN ingredients i ON ri.ingredient_id = i.id
+            LEFT JOIN measurements m ON ri.measurement_id = m.id
+            WHERE r.uuid = $1
+            ORDER BY ri.order_index ASC
+        """
+        
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(query, uuid)
+            
+            if not rows:
+                return None
+            
+            return RecipeService._map_db_rows_to_recipe(rows)
+    
+    @staticmethod
     async def get_by_title(title: str) -> Optional[Recipe]:
         """Get recipe by title."""
         pool = await get_pool()

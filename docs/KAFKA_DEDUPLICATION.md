@@ -201,11 +201,11 @@ The consumer reports processing stats:
 
 ```bash
 # Terminal 1: Start consumer
-./COMMANDS.sh kafka-consumer
+./CMD.sh kafka-consumer
 
 # Terminal 2: Scrape same posts twice
-./COMMANDS.sh scrape-kafka --limit 5
-./COMMANDS.sh scrape-kafka --limit 5  # Same posts again
+./CMD.sh scrape-kafka --limit 5
+./CMD.sh scrape-kafka --limit 5  # Same posts again
 
 # Result: Second run publishes 0 recipes (already processed)
 ```
@@ -238,7 +238,7 @@ kafka.publish_recipe(recipe)
 
 ```bash
 # After consuming, check if duplicates were prevented
-./COMMANDS.sh list
+./CMD.sh list
 
 # Or query database directly
 python -m recipes.cli search "Test Recipe"

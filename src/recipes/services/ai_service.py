@@ -238,6 +238,7 @@ Extract all available information and structure it according to the provided sch
         for ing in recipe.ingredients:
             item = ing.item.strip()
             amount = ing.amount.strip() if ing.amount else ""
+            notes = ing.notes
             
             # Skip if item looks like an instruction (starts with action verb)
             first_word = item.split()[0].lower() if item.split() else ""
@@ -248,16 +249,46 @@ Extract all available information and structure it according to the provided sch
             if any(header in item.lower() for header in ['**preparation', '**instructions', '**method', '**steps']):
                 continue
             
-            # Check if amount and item are swapped (amount contains ingredient name)
-            # Pattern: "1/2 cups beef stock" or "4oz pancetta" or "1/3rd cup cream" in item field
+            # Check if amount field contains an ingredient name (common swap pattern)
+            # Pattern: "1 Eggplant" or "2 Garlic" or "1 Spanish" in amount field
+            if amount:
+                # Check if amount contains capitalized words (likely ingredient names)
+                amount_parts = amount.split()
+                if len(amount_parts) >= 2:
+                    # Check if second word is capitalized (likely an ingredient)
+                    if amount_parts[1][0].isupper() and not amount_parts[1].lower() in ['cup', 'cups', 'tbsp', 'tsp', 'oz', 'g', 'kg', 'ml', 'l']:
+                        # Pattern like "1 Eggplant" or "2 Garlic"
+                        # Extract number from amount
+                        num_match = re.match(r'^(\d+(?:\.\d+)?(?:/\d+)?)\s+(.+)$', amount)
+                        if num_match:
+                            quantity = num_match.group(1)
+                            ingredient_part = num_match.group(2)
+                            # Item field likely has prep notes
+                            # Swap them: amount->item, item->notes
+                            amount = quantity
+                            notes = item if item else None
+                            item = ingredient_part
+            
+            # Check if amount and item are swapped (item field has quantity at start)
+            # Pattern: "1/2 cups beef stock" or "4oz pancetta" or "1/3rd cup cream" or "1 Eggplant" in item field
             if re.match(r'^\d+', item) or item.startswith('around'):
                 # Item field starts with a number - likely swapped
                 # Try to parse it (handle fractions with "rd", "st", "nd", "th" suffixes)
+                # Make unit optional to catch patterns like "1 Eggplant cut into cubes"
                 match = re.match(r'^(\d+(?:/\d+)?(?:st|nd|rd|th)?\s*(?:cups?|tbsp?|tsp?|oz|g|kg|ml|l|cloves?|pieces?)?)\s+(.+)$', item, re.IGNORECASE)
                 if match:
                     # Swap them
                     amount = match.group(1).strip()
                     item = match.group(2).strip()
+                    # Extract prep notes if present (e.g., "Eggplant cut into cubes" -> item="Eggplant", notes="cut into cubes")
+                    prep_verbs = ['cut', 'chopped', 'diced', 'minced', 'sliced', 'grated', 'shredded', 'peeled', 'finely']
+                    for verb in prep_verbs:
+                        if verb in item.lower():
+                            parts = re.split(r'\s+(?:' + verb + ')', item, maxsplit=1, flags=re.IGNORECASE)
+                            if len(parts) == 2:
+                                item = parts[0].strip()
+                                notes = (verb + parts[1]).strip()
+                                break
             
             # Clean up markdown and formatting
             item = re.sub(r'\*+', '', item)
@@ -268,7 +299,7 @@ Extract all available information and structure it according to the provided sch
                 cleaned_ingredients.append(RecipeIngredientSchema(
                     item=item,
                     amount=amount or "to taste",
-                    notes=ing.notes
+                    notes=notes
                 ))
         
         recipe.ingredients = cleaned_ingredients

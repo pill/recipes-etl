@@ -16,13 +16,16 @@ Each recipe has a **deterministic UUID** generated from its title and source URL
 
 UUIDs are generated using **UUID v5** (namespace-based) from:
 - **Recipe Title** (normalized: lowercase, trimmed)
-- **Source URL** or **Reddit Post ID**
+- **Source URL** (if available, e.g., for Reddit recipes: `reddit:{post_id}`)
+
+**Important:** UUIDs are based on **title only** for most recipes (not ingredients or instructions).
 
 This means:
-- ✅ Same recipe from same source = **Same UUID**
-- ✅ Automatic deduplication across pipeline restarts
+- ✅ Same title = **Same UUID** (regardless of ingredient variations)
+- ✅ Automatic deduplication by title across pipeline restarts
 - ✅ Idempotent processing (reprocessing doesn't create duplicates)
 - ✅ Predictable UUIDs for debugging
+- ✅ Simpler UUID logic - only title matters
 
 ### Benefits
 

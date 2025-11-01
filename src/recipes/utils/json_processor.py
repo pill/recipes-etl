@@ -3,7 +3,6 @@
 import json
 import os
 from typing import Dict, Any, Optional
-import hashlib
 import aiofiles
 from ..models.schemas import RecipeSchema
 from ..utils.uuid_utils import generate_recipe_uuid
@@ -19,7 +18,7 @@ class JSONProcessor:
             recipe_data: RecipeSchema object containing recipe data
             entry_number: Entry number for filename
             subdirectory: Optional subdirectory within data/stage/
-            source_url: Optional source URL for UUID generation (if not provided, uses ingredient fingerprint)
+            source_url: Optional source URL for UUID generation (if not provided, uses title only)
         """
         # Create output directory if it doesn't exist
         if subdirectory:
@@ -32,17 +31,8 @@ class JSONProcessor:
         # Convert to dict first
         recipe_dict = recipe_data.model_dump()
         
-        # Generate deterministic UUID
-        # If no source_url provided, create fingerprint from first 5 ingredients
-        if not source_url and recipe_data.ingredients:
-            ingredient_fingerprint = '|'.join([
-                ing.item[:50] if ing.item else ''
-                for ing in recipe_data.ingredients[:5]
-            ])
-            fingerprint_hash = hashlib.md5(ingredient_fingerprint.encode()).hexdigest()[:8]
-            source_url = f"staged:{fingerprint_hash}"
-        
-        # Generate UUID using same logic as database insertion
+        # Generate deterministic UUID based on title only (not ingredients)
+        # This ensures same title = same UUID, regardless of ingredient variations
         uuid = generate_recipe_uuid(recipe_data.title, source_url)
         recipe_dict['uuid'] = uuid
         

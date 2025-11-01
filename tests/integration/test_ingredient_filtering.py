@@ -15,27 +15,6 @@ from recipes.models.schemas import RecipeSchema
 
 def test_ingredient_filtering(recipe_json):
     """Test ingredient filtering logic."""
-    # Apply the same transformations as in load_json_to_db
-    if 'recipeData' in recipe_json:
-        recipe_json = recipe_json['recipeData']
-    
-    # Convert ingredient format if needed
-    if 'ingredients' in recipe_json and recipe_json['ingredients']:
-        converted_ingredients = []
-        for ing in recipe_json['ingredients']:
-            if 'name' in ing and 'item' not in ing:
-                quantity = ing.get('quantity', '')
-                unit = ing.get('unit', '')
-                amount_str = f"{quantity} {unit}".strip() if quantity or unit else "to taste"
-                converted_ingredients.append({
-                    'item': ing.get('name', ''),
-                    'amount': amount_str,
-                    'notes': ing.get('notes')
-                })
-            else:
-                converted_ingredients.append(ing)
-        recipe_json['ingredients'] = converted_ingredients
-    
     # Parse as RecipeSchema
     recipe_schema = RecipeSchema.model_validate(recipe_json)
     

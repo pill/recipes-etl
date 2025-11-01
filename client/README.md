@@ -1,4 +1,73 @@
-# React + TypeScript + Vite
+# Recipe Sandbox - React Client
+
+A modern React + TypeScript + Vite client for exploring and searching recipes from the recipes-etl pipeline.
+
+## Features
+
+### 🎲 Random Recipe
+Get a random recipe from the database to discover new dishes.
+
+### 🔍 Full-Text Search
+Search recipes by keywords in title, description, or instructions using Elasticsearch.
+
+### 🏷️ By UUID
+Look up a specific recipe using its unique identifier (UUID). Perfect for:
+- Tracking recipes through the ETL pipeline
+- Debugging UUID changes
+- Direct recipe lookups
+- Comparing different versions of the same recipe
+
+### 🥘 By Ingredient
+Filter recipes that contain specific ingredients.
+
+### ⚡ Quick & Easy
+Find recipes that can be prepared quickly.
+
+### 🌍 Cuisine Analysis
+Analyze recipes by cuisine type and view ingredient combinations.
+
+## Setup
+
+### Prerequisites
+- Node.js 18+ installed
+- Elasticsearch running on `localhost:9200`
+- Recipe data loaded into Elasticsearch index
+
+### Installation
+
+```bash
+cd client
+npm install
+```
+
+### Development
+
+```bash
+npm run dev
+```
+
+The client will start on `http://localhost:5173` and proxy API requests to Elasticsearch.
+
+### Build
+
+```bash
+npm run build
+```
+
+## Usage Examples
+
+### Search by UUID
+1. Click the "By UUID" tab
+2. Enter a UUID (e.g., `8faa4a5f-4f52-56db-92aa-fa574ed6b62c`)
+3. Press Enter or click "Search"
+4. View the complete recipe details including all metadata
+
+This is useful for:
+- Finding recipes that changed UUIDs after reprocessing
+- Tracking specific recipes through the pipeline
+- Debugging duplicate detection
+
+## React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 

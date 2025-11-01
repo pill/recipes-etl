@@ -43,20 +43,20 @@ docker ps | grep kafka
 
 ```bash
 # Scrape once and publish to Kafka
-./COMMANDS.sh scrape-kafka --limit 10
+./CMD.sh scrape-kafka --limit 10
 
 # Monitor continuously and publish to Kafka
-./COMMANDS.sh scrape-kafka --continuous --interval 300
+./CMD.sh scrape-kafka --continuous --interval 300
 ```
 
 ### 3. Consume and Process Events
 
 ```bash
 # Consume events (process and load to database)
-./COMMANDS.sh kafka-consumer
+./CMD.sh kafka-consumer
 
 # Consume and save to CSV only
-./COMMANDS.sh kafka-consumer --save-csv --no-process --no-db
+./CMD.sh kafka-consumer --save-csv --no-process --no-db
 
 # Consume 10 messages and exit
 python scripts/processing/kafka_consumer.py --max-messages 10
@@ -244,19 +244,19 @@ kafka_service.consume_recipes(callback=process_recipe)
 docker-compose up -d
 
 # 2. Start scraper (publish to Kafka)
-./COMMANDS.sh scrape-kafka --continuous --interval 600 &
+./CMD.sh scrape-kafka --continuous --interval 600 &
 
 # 3. Start consumer (save to CSV for backup)
-./COMMANDS.sh kafka-consumer --save-csv &
+./CMD.sh kafka-consumer --save-csv &
 
 # 4. Monitor with Kafka UI
 open http://localhost:8082
 
 # 5. Search processed recipes
-./COMMANDS.sh search "korean"
+./CMD.sh search "korean"
 
 # 6. View stats
-./COMMANDS.sh stats
+./CMD.sh stats
 ```
 
 ## Troubleshooting

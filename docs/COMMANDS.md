@@ -105,15 +105,67 @@ source activate.sh
 # List recent recipes
 python -m recipes.cli list-recipes
 
-# Search recipes
-python -m recipes.cli search-recipes "chicken"
+# Search recipes by text
+python -m recipes.cli search-recipes 'chicken pasta'
 
-# Get recipe by ID
-python -m recipes.cli get-recipe 123
+# Get recipe by UUID (shows full details)
+python -m recipes.cli get-by-uuid 8faa4a5f-4f52-56db-92aa-fa574ed6b62c
 
 # View statistics
 python -m recipes.cli stats
 ```
+
+**Using CMD.sh shortcuts:**
+
+```bash
+# Search by text
+./CMD.sh search 'chicken pasta'
+
+# Get by UUID
+./CMD.sh get-by-uuid 8faa4a5f-4f52-56db-92aa-fa574ed6b62c
+
+# List recent
+./CMD.sh list
+
+# Show stats
+./CMD.sh stats
+```
+
+### Reload Recipe (JSON → DB → Elasticsearch)
+
+Reload a specific recipe through the entire pipeline by UUID:
+
+```bash
+source activate.sh
+
+# Reload recipe (searches in data/stage by default)
+python -m recipes.cli reload-recipe 8faa4a5f-4f52-56db-92aa-fa574ed6b62c
+
+# Reload recipe from custom directory
+python -m recipes.cli reload-recipe 8faa4a5f-4f52-56db-92aa-fa574ed6b62c --json-dir data/stage/Reddit_Recipes
+```
+
+**Using CMD.sh shortcut:**
+
+```bash
+# Reload recipe (default directory)
+./CMD.sh reload-recipe 8faa4a5f-4f52-56db-92aa-fa574ed6b62c
+
+# Reload recipe (custom directory)
+./CMD.sh reload-recipe 8faa4a5f-4f52-56db-92aa-fa574ed6b62c --json-dir data/stage/Reddit_Recipes
+```
+
+**What it does:**
+1. Searches for `{UUID}.json` file in specified directory (recursively)
+2. Loads the recipe into PostgreSQL database (updates if exists)
+3. Syncs the recipe to Elasticsearch index
+4. Shows progress and final status
+
+**Use cases:**
+- Recipe was updated manually in JSON
+- Recipe needs to be reindexed in Elasticsearch
+- Fixing data inconsistencies
+- Testing recipe changes
 
 ### Database Operations
 

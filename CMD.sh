@@ -1,13 +1,13 @@
 #!/bin/bash
 # Quick command shortcuts for recipes-etl project
 # 
-# Usage: ./COMMANDS.sh <command>
+# Usage: ./CMD.sh <command>
 #
 # Examples:
-#   ./COMMANDS.sh help
-#   ./COMMANDS.sh start
-#   ./COMMANDS.sh worker
-#   ./COMMANDS.sh test
+#   ./CMD.sh help
+#   ./CMD.sh start
+#   ./CMD.sh worker
+#   ./CMD.sh test
 
 # Project root
 if [ -n "${BASH_SOURCE[0]}" ]; then
@@ -68,6 +68,14 @@ case "$1" in
         shift
         cd "$PROJECT_ROOT" && source activate.sh && python -m recipes.cli search-recipes "$@"
         ;;
+    get-by-uuid)
+        shift
+        cd "$PROJECT_ROOT" && source activate.sh && python -m recipes.cli get-by-uuid "$@"
+        ;;
+    reload-recipe)
+        shift
+        cd "$PROJECT_ROOT" && source activate.sh && python -m recipes.cli reload-recipe "$@"
+        ;;
     list)
         cd "$PROJECT_ROOT" && source activate.sh && python -m recipes.cli list-recipes
         ;;
@@ -94,71 +102,90 @@ case "$1" in
         shift
         cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/processing/kafka_consumer.py "$@"
         ;;
-    schedule)
+    reddit-schedule)
         shift
         cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/runners/run_reddit_schedule.py "$@"
         ;;
+    search-sync-schedule)
+        shift
+        ACTION="$1"
+        shift
+        cd "$PROJECT_ROOT" && source activate.sh && python3 scripts/runners/run_search_sync_schedule.py "$ACTION" "$@"
+        ;;
     help|"")
         echo "╔══════════════════════════════════════════════════╗"
-        echo "║         Recipe ETL Command Shortcuts            ║"
+        echo "║         Recipe ETL Command Shortcuts             ║"
         echo "╚══════════════════════════════════════════════════╝"
         echo ""
         echo "📦 Setup:"
-        echo "  ./COMMANDS.sh install       - Install dependencies"
-        echo "  ./COMMANDS.sh test          - Test Python setup"
-        echo "  ./COMMANDS.sh check-db      - Check database connection"
+        echo "  ./CMD.sh install       - Install dependencies"
+        echo "  ./CMD.sh test          - Test Python setup"
+        echo "  ./CMD.sh check-db      - Check database connection"
         echo ""
         echo "🐳 Docker Services:"
-        echo "  ./COMMANDS.sh start         - Start all services"
-        echo "  ./COMMANDS.sh stop          - Stop all services"
-        echo "  ./COMMANDS.sh restart       - Restart services"
-        echo "  ./COMMANDS.sh logs          - Show service logs"
-        echo "  ./COMMANDS.sh ps            - Show running services"
+        echo "  ./CMD.sh start         - Start all services"
+        echo "  ./CMD.sh stop          - Stop all services"
+        echo "  ./CMD.sh restart       - Restart services"
+        echo "  ./CMD.sh logs          - Show service logs"
+        echo "  ./CMD.sh ps            - Show running services"
         echo ""
         echo "⚙️  Processing:"
-        echo "  ./COMMANDS.sh worker        - Start Temporal worker"
-        echo "  ./COMMANDS.sh client <args> - Run Temporal client"
-        echo "  ./COMMANDS.sh load          - Load recipes to database"
-        echo "  ./COMMANDS.sh load-folder <folder> - Load JSON files from folder to database"
-        echo "  ./COMMANDS.sh process <args> - Process and load recipes"
+        echo "  ./CMD.sh worker        - Start Temporal worker"
+        echo "  ./CMD.sh client <args> - Run Temporal client"
+        echo "  ./CMD.sh load          - Load recipes to database"
+        echo "  ./CMD.sh load-folder <folder> - Load JSON files from folder to database"
+        echo "  ./CMD.sh process <args> - Process and load recipes"
         echo ""
         echo "📡 Reddit Scraping:"
-        echo "  ./COMMANDS.sh scrape [--subreddit recipes] [--limit 25]"
+        echo "  ./CMD.sh scrape [--subreddit recipes] [--limit 25]"
         echo "                              - Scrape Reddit once and save to CSV"
-        echo "  ./COMMANDS.sh scrape-continuous [--interval 300]"
+        echo "  ./CMD.sh scrape-continuous [--interval 300]"
         echo "                              - Monitor Reddit continuously (CSV)"
-        echo "  ./COMMANDS.sh scrape-kafka [--continuous] [--limit 25]"
+        echo "  ./CMD.sh scrape-kafka [--continuous] [--limit 25]"
         echo "                              - Scrape and publish to Kafka"
-        echo "  ./COMMANDS.sh kafka-consumer [--save-csv] [--no-db]"
+        echo "  ./CMD.sh kafka-consumer [--save-csv] [--no-db]"
         echo "                              - Consume recipe events from Kafka"
         echo ""
         echo "⏰ Temporal Schedules:"
-        echo "  ./COMMANDS.sh schedule create [--interval 5]"
-        echo "                              - Create schedule (every 5 min default)"
-        echo "  ./COMMANDS.sh schedule pause|unpause|trigger|describe|delete"
-        echo "                              - Manage the schedule"
+        echo "  ./CMD.sh reddit-schedule create [--interval 5]"
+        echo "                              - Create Reddit scraper schedule (every 5 min default)"
+        echo "  ./CMD.sh reddit-schedule pause|unpause|trigger|describe|delete"
+        echo "                              - Manage the Reddit scraper schedule"
+        echo "  ./CMD.sh search-sync-schedule create [--interval 60] [--batch-size 1000]"
+        echo "                              - Create search sync schedule (every 60 min default)"
+        echo "  ./CMD.sh search-sync-schedule pause|unpause|trigger|describe|delete"
+        echo "                              - Manage the search sync schedule"
         echo ""
         echo "🔍 Search & Query:"
-        echo "  ./COMMANDS.sh search <term> - Search recipes"
-        echo "  ./COMMANDS.sh list          - List recent recipes"
-        echo "  ./COMMANDS.sh stats         - Show statistics"
-        echo "  ./COMMANDS.sh cli <command> - Run any CLI command"
+        echo "  ./CMD.sh search <term>       - Search recipes by text"
+        echo "  ./CMD.sh get-by-uuid <uuid>  - Get recipe by UUID"
+        echo "  ./CMD.sh list                - List recent recipes"
+        echo "  ./CMD.sh stats               - Show statistics"
+        echo "  ./CMD.sh cli <command>       - Run any CLI command"
+        echo ""
+        echo "🔄 Recipe Management:"
+        echo "  ./CMD.sh reload-recipe <uuid> [--json-dir data/stage]"
+        echo "                                    - Reload recipe from JSON → DB → Elasticsearch"
         echo ""
         echo "💡 Examples:"
-        echo "  ./COMMANDS.sh start                      # Start all services"
-        echo "  ./COMMANDS.sh worker                     # Start Temporal worker"
-        echo "  ./COMMANDS.sh load-folder data/stage/Reddit_Recipes  # Load folder to DB"
-        echo "  ./COMMANDS.sh schedule create --interval 5  # Schedule every 5 min"
-        echo "  ./COMMANDS.sh schedule describe          # Check schedule status"
-        echo "  ./COMMANDS.sh kafka-consumer --save-csv  # Consume from Kafka"
-        echo "  ./COMMANDS.sh search 'chicken pasta'     # Search recipes"
+        echo "  ./CMD.sh start                      # Start all services"
+        echo "  ./CMD.sh worker                     # Start Temporal worker"
+        echo "  ./CMD.sh load-folder data/stage/Reddit_Recipes  # Load folder to DB"
+        echo "  ./CMD.sh reddit-schedule create --interval 5  # Schedule Reddit scraper"
+        echo "  ./CMD.sh reddit-schedule describe   # Check schedule status"
+        echo "  ./CMD.sh search-sync-schedule create --interval 60  # Schedule search sync"
+        echo "  ./CMD.sh search-sync-schedule describe  # Check search sync status"
+        echo "  ./CMD.sh kafka-consumer --save-csv  # Consume from Kafka"
+        echo "  ./CMD.sh search 'chicken pasta'     # Search recipes"
+        echo "  ./CMD.sh get-by-uuid 8faa4a5f-4f52-56db-92aa-fa574ed6b62c  # Get recipe by UUID"
+        echo "  ./CMD.sh reload-recipe 8faa4a5f-4f52-56db-92aa-fa574ed6b62c  # Reload recipe to DB & Elastic"
         echo ""
         echo "📚 For detailed documentation, see: docs/COMMANDS.md"
         ;;
     *)
         echo "❌ Unknown command: $1"
         echo ""
-        echo "Run './COMMANDS.sh help' to see available commands"
+        echo "Run './CMD.sh help' to see available commands"
         exit 1
         ;;
 esac
