@@ -48,6 +48,7 @@ python -m recipes.cli test-ai
 - **PostgreSQL Database**: Relational storage with full schema
 - **UUID Tracking**: Track recipes through entire pipeline with unique identifiers
 - **Elasticsearch**: Full-text search and recommendations
+- **Semantic Search**: Vector embeddings for meaning-based recipe discovery
 - **CLI Interface**: Easy command-line tools
 - **Docker Support**: Complete containerization
 
@@ -290,7 +291,7 @@ docker-compose up -d zookeeper kafka kafka-ui
 
 ### Search with Elasticsearch
 
-Enable full-text search and recommendations:
+Enable full-text search, semantic search, and recommendations:
 
 ```bash
 # 1. Start Elasticsearch and Kibana
@@ -298,8 +299,8 @@ docker-compose up -d elasticsearch kibana
 
 # 2. Wait ~30 seconds for Elasticsearch to be ready
 
-# 3. Sync recipes from database to Elasticsearch
-source venv/bin/activate
+# 3. Sync recipes from database to Elasticsearch (with embeddings)
+source activate.sh
 python -m recipes.cli sync-search
 
 # Access Kibana at http://localhost:5601
@@ -308,12 +309,18 @@ python -m recipes.cli sync-search
 
 **Test your search:**
 ```bash
-# Search for recipes
+# Traditional text search
 curl "http://localhost:9200/recipes/_search?q=chicken&pretty"
 
 # Count recipes
 curl "http://localhost:9200/recipes/_count?pretty"
 ```
+
+**Semantic Search:**
+- Finds recipes by meaning, not just keywords
+- Great for queries like "comfort food" or "healthy breakfast"
+- Uses vector embeddings (384 dimensions) stored in Elasticsearch
+- See [EMBEDDINGS_GUIDE.md](./docs/EMBEDDINGS_GUIDE.md) for details
 
 See [ELASTICSEARCH_GUIDE.md](./docs/ELASTICSEARCH_GUIDE.md) for complete search documentation.
 
@@ -333,10 +340,18 @@ npm run dev
 **Features:**
 - 🎲 **Random Recipe** - Discover random recipes
 - 🔍 **Full-Text Search** - Search by keywords using Elasticsearch
+- 🧠 **Semantic Search** - Find recipes by meaning (e.g., "comfort food", "healthy breakfast")
+- 🔀 **Hybrid Search** - Combines text and semantic search for best results
 - 🏷️ **UUID Search** - Look up specific recipes by UUID (perfect for debugging!)
 - 🥘 **Ingredient Search** - Filter by ingredients
 - ⚡ **Quick & Easy** - Find fast recipes
 - 🌍 **Cuisine Analysis** - Analyze recipes by cuisine
+
+**Semantic Search Examples:**
+- "comfort food" → Finds hearty, warming dishes
+- "healthy breakfast" → Finds nutritious morning meals
+- "quick weeknight dinner" → Finds fast, simple recipes
+- "party appetizers" → Finds finger foods and snacks
 
 **UUID Search Use Cases:**
 - Track recipes through the ETL pipeline
@@ -346,10 +361,23 @@ npm run dev
 
 Example: Search for `8faa4a5f-4f52-56db-92aa-fa574ed6b62c` to see full recipe details.
 
+**Search API Server:**
+For semantic search, start the API server:
+```bash
+source activate.sh
+python -m recipes.api
+# API runs on http://localhost:8000
+```
+
+See [SEMANTIC_SEARCH_CLIENT.md](./docs/SEMANTIC_SEARCH_CLIENT.md) for complete setup.
+
 ---
 
 **📚 Complete Documentation**:
 - [TEMPORAL_GUIDE.md](./docs/TEMPORAL_GUIDE.md) - Workflow orchestration guide
+- [EMBEDDINGS_GUIDE.md](./docs/EMBEDDINGS_GUIDE.md) - Vector embeddings and semantic search
+- [SEMANTIC_SEARCH_CLIENT.md](./docs/SEMANTIC_SEARCH_CLIENT.md) - Using semantic search from React client
+- [ELASTICSEARCH_GUIDE.md](./docs/ELASTICSEARCH_GUIDE.md) - Elasticsearch setup and queries
 - [README_PYTHON.md](./docs/README_PYTHON.md) - Detailed Python documentation
 - [MIGRATION_GUIDE.md](./docs/MIGRATION_GUIDE.md) - TypeScript to Python migration
 - [MIGRATION_COMPLETE.md](./docs/MIGRATION_COMPLETE.md) - Migration summary
@@ -366,14 +394,16 @@ Example: Search for `8faa4a5f-4f52-56db-92aa-fa574ed6b62c` to see full recipe de
 - **asyncpraw** - Reddit async API wrapper
 
 ### Data & Infrastructure
-- **PostgreSQL 15** - Relational database
-- **Elasticsearch 8** - Full-text search and recommendations
+- **PostgreSQL 15** - Relational database with pgvector extension
+- **Elasticsearch 8** - Full-text search, semantic search, and recommendations
+- **Vector Embeddings** - 384-dimensional embeddings using sentence-transformers
 - **Docker** - Containerization and deployment
 - **Redis** - Caching (future)
 
 ### Frontend (Separate)
 - **React + TypeScript** - Modern web frontend (`client/`)
-- **Vite** - Build tool
+- **Vite** - Build tool with API proxy
+- **FastAPI** - Search API server for semantic search
 
 ## 📋 CLI Commands
 
@@ -402,6 +432,12 @@ python -m recipes.worker               # Start Temporal worker
 python -m recipes.client batch <csv> <start> <end>
 python -m recipes.client batch-local <csv> <start> <end>
 python -m recipes.client batch-parallel <csv> <start> <end> <batch-size>
+```
+
+### Search API Operations
+```bash
+python -m recipes.api                  # Start search API server (port 8000)
+python -m recipes.cli sync-search      # Sync recipes to Elasticsearch with embeddings
 ```
 
 ## 🐳 Docker Setup
@@ -441,8 +477,9 @@ docker-compose down
 1. **CSV Input** → CSV Parser → Raw Data
 2. **Raw Data** → AI Service or Local Parser → Structured Recipe Data
 3. **Recipe Data** → JSON Processor → JSON Files
-4. **JSON Files** → Recipe Service → PostgreSQL Database
-5. **Database** → Search Service → Elasticsearch Index
+4. **JSON Files** → Recipe Service → PostgreSQL Database (with embeddings)
+5. **Database** → Search Service → Elasticsearch Index (with vector embeddings)
+6. **Search API** → Generates query embeddings → kNN search in Elasticsearch
 
 ### Project Structure
 
@@ -450,7 +487,8 @@ docker-compose down
 recipes-etl/
 ├── src/recipes/              # Main Python package
 │   ├── models/              # Pydantic data models
-│   ├── services/            # Business logic (AI, DB, Search, Reddit)
+│   ├── services/            # Business logic (AI, DB, Search, Reddit, Embeddings)
+│   ├── api/                 # FastAPI search endpoints
 │   ├── workflows/           # Temporal workflows & activities
 │   ├── database/            # Database connection & queries
 │   ├── utils/               # Utility functions
@@ -470,8 +508,16 @@ recipes-etl/
 1. **Get Raw Data**: Reddit, Kaggle CSV, or direct scraping
 2. **Transform**: AI or local parsing to structured JSON
 3. **Clean**: Deduplication and validation
-4. **Load**: Insert into PostgreSQL database
-5. **Index**: Sync to Elasticsearch for search
+4. **Load**: Insert into PostgreSQL database (with vector embeddings)
+5. **Index**: Sync to Elasticsearch for search (with vector embeddings)
+6. **Search**: Text search, semantic search, or hybrid search via API
+
+### Current Features
+
+- **Semantic Search**: Vector embeddings for meaning-based recipe discovery
+- **Hybrid Search**: Combines keyword and semantic search
+- **Vector Embeddings**: 384-dimensional embeddings using sentence-transformers
+- **Search API**: FastAPI server for semantic search queries
 
 ### Future Features
 
@@ -481,6 +527,7 @@ recipes-etl/
   - Cost optimization with grocery prices
   - User preference feedback loop
   - Skill level matching
+  - Similar recipe recommendations using embeddings
 
 ## 📦 Development
 
@@ -513,11 +560,19 @@ This script helps maintain data consistency by removing old `entry_*.json` files
 
 ## 📈 Version History
 
+### v2.2 (Current)
+- **Semantic Search**: Vector embeddings for meaning-based recipe discovery
+- **Search API**: FastAPI server for semantic and hybrid search
+- **Vector Embeddings**: 384-dimensional embeddings using sentence-transformers
+- **React Client Updates**: Semantic and hybrid search modes in web UI
+- **Elasticsearch Integration**: kNN search with dense vector fields
+- **Database Support**: pgvector extension for embedding storage (optional cache)
+
 ### v2.1
 - data firehose from Reddit data (r/recipes)
 - Kafka topic to collect scraper data
 
-### v2.0 (Current - Python)
+### v2.0 (Python)
 - Complete migration to Python
 - Pydantic models with runtime validation
 - Better async/await support
