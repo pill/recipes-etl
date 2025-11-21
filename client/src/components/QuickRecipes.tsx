@@ -23,6 +23,8 @@ interface Recipe {
   meal_type?: string
   dietary_tags?: string[]
   source_url?: string
+  created_at?: string
+  updated_at?: string
 }
 
 const PAGE_SIZE = 10
@@ -71,7 +73,7 @@ export default function QuickRecipes() {
       const data = await response.json()
       
       if (data.hits?.hits?.length > 0) {
-        setRecipes(data.hits.hits.map((hit: any) => hit._source))
+        setRecipes(data.hits.hits.map((hit: { _source: Recipe }) => hit._source))
         setTotalHits(data.hits.total.value)
         setCurrentPage(page)
       } else {
@@ -144,6 +146,8 @@ export default function QuickRecipes() {
               meal_type={recipe.meal_type}
               dietary_tags={recipe.dietary_tags}
               source_url={recipe.source_url}
+              created_at={recipe.created_at}
+              updated_at={recipe.updated_at}
             />
           ))}
           <Pagination

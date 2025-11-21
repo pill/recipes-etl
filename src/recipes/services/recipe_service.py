@@ -87,6 +87,37 @@ class RecipeService:
                         except Exception as ing_error:
                             print(f"Warning: Failed to insert some ingredients for recipe '{recipe.title[:50]}': {str(ing_error)}")
                             # Continue anyway - recipe is created, just missing some ingredients
+                    
+                    # Generate and store embedding
+                    try:
+                        # Fetch the complete recipe with ingredients using the same connection
+                        full_recipe = await RecipeService._get_by_id_with_conn(conn, recipe_id)
+                        if full_recipe:
+                            try:
+                                from .embedding_service import get_embedding_service
+                                embedding_service = get_embedding_service()
+                                embedding = embedding_service.generate_recipe_embedding(full_recipe)
+                            except ImportError:
+                                # sentence-transformers not installed, skip embedding
+                                embedding = None
+                            
+                            if embedding:
+                                # Format embedding as string for pgvector: '[0.1, 0.2, ...]'
+                                embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
+                                
+                                # Store embedding in database
+                                try:
+                                    await conn.execute(
+                                        'UPDATE recipes SET embedding = $1::vector WHERE id = $2',
+                                        embedding_str,
+                                        recipe_id
+                                    )
+                                except Exception as store_error:
+                                    # Column might not exist, that's okay
+                                    pass
+                    except Exception as emb_error:
+                        print(f"Warning: Failed to generate embedding for recipe '{recipe.title[:50]}': {str(emb_error)}")
+                        # Continue anyway - recipe is created, just missing embedding
             
             # Transaction is now committed - fetch the complete recipe with the same connection pool
             created_recipe = await RecipeService.get_by_id(recipe_id)
@@ -412,6 +443,38 @@ class RecipeService:
                     if updates['ingredients']:
                         await RecipeService._insert_recipe_ingredients(conn, recipe_id, updates['ingredients'])
                 
+                # Regenerate embedding if title or ingredients changed
+                needs_embedding_update = 'title' in updates or 'ingredients' in updates
+                if needs_embedding_update:
+                    try:
+                        # Fetch the complete updated recipe using the same connection
+                        updated_recipe = await RecipeService._get_by_id_with_conn(conn, recipe_id)
+                        if updated_recipe:
+                            try:
+                                from .embedding_service import get_embedding_service
+                                embedding_service = get_embedding_service()
+                                embedding = embedding_service.generate_recipe_embedding(updated_recipe)
+                                
+                                if embedding:
+                                    # Format embedding as string for pgvector
+                                    embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
+                                    
+                                    # Update embedding in database
+                                    try:
+                                        await conn.execute(
+                                            'UPDATE recipes SET embedding = $1::vector WHERE id = $2',
+                                            embedding_str,
+                                            recipe_id
+                                        )
+                                    except Exception as store_error:
+                                        # Column might not exist, that's okay
+                                        pass
+                            except ImportError:
+                                # sentence-transformers not installed, skip embedding
+                                pass
+                    except Exception as emb_error:
+                        print(f"Warning: Failed to regenerate embedding for recipe {recipe_id}: {str(emb_error)}")
+                
                 # Fetch the complete recipe with ingredients
                 return await RecipeService.get_by_id(recipe_id)
     
@@ -547,6 +610,39 @@ class RecipeService:
             )
         
         return recipe_ingredient
+    
+    @staticmethod
+    async def _get_by_id_with_conn(conn, recipe_id: int) -> Optional[Recipe]:
+        """Get recipe by ID using an existing connection."""
+        query = """
+            SELECT 
+                r.*,
+                ri.id as recipe_ingredient_id,
+                ri.ingredient_id,
+                ri.measurement_id,
+                ri.amount,
+                ri.notes,
+                ri.order_index,
+                i.name as ingredient_name,
+                i.category as ingredient_category,
+                i.description as ingredient_description,
+                m.name as measurement_name,
+                m.abbreviation as measurement_abbreviation,
+                m.unit_type as measurement_unit_type
+            FROM recipes r
+            LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+            LEFT JOIN ingredients i ON ri.ingredient_id = i.id
+            LEFT JOIN measurements m ON ri.measurement_id = m.id
+            WHERE r.id = $1
+            ORDER BY ri.order_index ASC
+        """
+        
+        rows = await conn.fetch(query, recipe_id)
+        
+        if not rows:
+            return None
+        
+        return RecipeService._map_db_rows_to_recipe(rows)
     
     @staticmethod
     def _map_db_row_to_recipe(row: Any) -> Recipe:

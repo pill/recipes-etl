@@ -69,3 +69,8 @@ urllib3==2.5.0
 virtualenv==20.35.3
 yarl==1.22.0
 kafka-python>=2.0.2
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+# sentence-transformers and torch are optional dependencies for embeddings
+# Install separately if needed: pip install sentence-transformers
+# Note: torch may not be available for Python 3.13 - use Python 3.11 or 3.12 if needed

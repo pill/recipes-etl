@@ -19,5 +19,6 @@ echo "  ./recipes --help              # Run CLI directly"
 echo "  python -m recipes.cli         # Run CLI via Python"
 echo "  python -m recipes.worker      # Start Temporal worker"
 echo "  python -m recipes.client      # Run Temporal client"
+echo "  python -m recipes.api         # Start search API server"
 echo ""
 

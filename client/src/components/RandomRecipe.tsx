@@ -20,6 +20,8 @@ interface Recipe {
   difficulty?: string
   cuisine_type?: string
   meal_type?: string
+  created_at?: string
+  updated_at?: string
 }
 
 export default function RandomRecipe() {
@@ -89,6 +91,8 @@ export default function RandomRecipe() {
           difficulty={recipe.difficulty}
           cuisine_type={recipe.cuisine_type}
           meal_type={recipe.meal_type}
+          created_at={recipe.created_at}
+          updated_at={recipe.updated_at}
         />
       )}
     </div>

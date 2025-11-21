@@ -19,6 +19,7 @@ psql postgresql://postgres:postgres@localhost:5432/recipes -f db/migrations/001_
 ## Migration Files
 
 - `001_add_recipe_uuid.sql` - Adds UUID column to recipes table for tracking through pipeline stages
+- `002_add_recipe_embeddings.sql` - Adds vector embedding column to recipes table for semantic search based on title and ingredients
 
 ## Best Practices
 

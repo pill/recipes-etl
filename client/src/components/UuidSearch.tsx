@@ -24,6 +24,8 @@ interface Recipe {
   source_url?: string
   reddit_score?: number
   reddit_author?: string
+  created_at?: string
+  updated_at?: string
 }
 
 export default function UuidSearch() {
@@ -172,6 +174,8 @@ export default function UuidSearch() {
             source_url={recipe.source_url}
             reddit_score={recipe.reddit_score}
             reddit_author={recipe.reddit_author}
+            created_at={recipe.created_at}
+            updated_at={recipe.updated_at}
           />
         </div>
       )}

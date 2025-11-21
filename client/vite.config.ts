@@ -7,6 +7,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
+      // Proxy semantic search to API server (handles embedding generation)
+      '/api/recipes/_search': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      // Proxy other Elasticsearch requests directly
       '/api/recipes': {
         target: 'http://localhost:9200',
         changeOrigin: true,

@@ -23,6 +23,8 @@ interface RecipeCardProps {
   source_url?: string
   reddit_score?: number
   reddit_author?: string
+  created_at?: string
+  updated_at?: string
 }
 
 export default function RecipeCard({ 
@@ -42,8 +44,25 @@ export default function RecipeCard({
   dietary_tags,
   source_url,
   reddit_score,
-  reddit_author
+  reddit_author,
+  created_at,
+  updated_at
 }: RecipeCardProps) {
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return null
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return null
+    }
+  }
   return (
     <div style={{
       border: '1px solid #ccc',
@@ -142,6 +161,12 @@ export default function RecipeCard({
       }}>
         {uuid && <div style={{ fontFamily: 'monospace', marginBottom: '0.25rem' }}>UUID: {uuid}</div>}
         {id && <div>Recipe ID: {id}</div>}
+        {created_at && (
+          <div>📅 Created: <strong>{formatDate(created_at)}</strong></div>
+        )}
+        {updated_at && (
+          <div>🔄 Updated: <strong>{formatDate(updated_at)}</strong></div>
+        )}
         {reddit_author && (
           <div>👤 Reddit: <strong>{reddit_author}</strong> {reddit_score && `(${reddit_score} ⬆️)`}</div>
         )}

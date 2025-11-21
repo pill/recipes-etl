@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.helpers import async_bulk
 from ..config import elasticsearch_config
+from ..database import get_pool
 from ..models.recipe import Recipe
 from ..services.recipe_service import RecipeService
 
@@ -94,7 +95,13 @@ class ElasticsearchService:
                     "reddit_score": {"type": "integer"},
                     "reddit_author": {"type": "keyword"},
                     "reddit_post_id": {"type": "keyword"},
-                    "created_at": {"type": "date"}
+                    "created_at": {"type": "date"},
+                    "embedding": {
+                        "type": "dense_vector",
+                        "dims": 384,
+                        "index": True,
+                        "similarity": "cosine"
+                    }
                 }
             }
         }
@@ -128,8 +135,89 @@ class ElasticsearchService:
         
         return False
     
-    def _recipe_to_document(self, recipe: Recipe) -> Dict[str, Any]:
-        """Convert a Recipe model to Elasticsearch document."""
+    async def _get_recipe_embedding(self, recipe: Recipe, use_database_cache: bool = True) -> Optional[List[float]]:
+        """
+        Get embedding for a recipe from database or generate it if missing.
+        
+        Args:
+            recipe: Recipe object
+            use_database_cache: If True, try to fetch from database first. If False, always generate.
+            
+        Returns:
+            List of floats representing the embedding vector, or None if generation fails
+        """
+        try:
+            from ..services.embedding_service import get_embedding_service
+            embedding_service = get_embedding_service()
+        except ImportError:
+            print("Warning: sentence-transformers not installed. Skipping embedding generation.")
+            return None
+        
+        # If not using database cache, just generate
+        if not use_database_cache:
+            try:
+                return embedding_service.generate_recipe_embedding(recipe)
+            except Exception as e:
+                print(f"Warning: Failed to generate embedding for recipe {recipe.id}: {str(e)}")
+                return None
+        
+        # Try to fetch from database first
+        pool = await get_pool()
+        
+        try:
+            async with pool.acquire() as conn:
+                # Try to fetch embedding from database
+                try:
+                    query = "SELECT embedding FROM recipes WHERE id = $1"
+                    row = await conn.fetchrow(query, recipe.id)
+                    
+                    if row and row['embedding']:
+                        # Parse the vector string from PostgreSQL
+                        # pgvector returns as a string like '[0.1,0.2,...]'
+                        embedding_str = str(row['embedding'])
+                        # Remove brackets and split by comma
+                        embedding_str = embedding_str.strip('[]')
+                        embedding = [float(x.strip()) for x in embedding_str.split(',') if x.strip()]
+                        if len(embedding) == 384:
+                            return embedding
+                except Exception as db_error:
+                    # Database column might not exist, continue to generate
+                    pass
+                
+                # If no embedding in database, generate it
+                embedding = embedding_service.generate_recipe_embedding(recipe)
+                
+                # Try to store it in the database for future use (optional)
+                try:
+                    embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
+                    await conn.execute(
+                        'UPDATE recipes SET embedding = $1::vector WHERE id = $2',
+                        embedding_str,
+                        recipe.id
+                    )
+                except Exception as store_error:
+                    # If storing fails (e.g., column doesn't exist), that's okay
+                    # Just continue without storing
+                    pass
+                
+                return embedding
+        except Exception as e:
+            print(f"Warning: Failed to get/generate embedding for recipe {recipe.id}: {str(e)}")
+            # Fallback: try to generate embedding without storing
+            try:
+                return embedding_service.generate_recipe_embedding(recipe)
+            except Exception as gen_error:
+                print(f"Warning: Failed to generate embedding for recipe {recipe.id}: {str(gen_error)}")
+                return None
+    
+    def _recipe_to_document(self, recipe: Recipe, embedding: Optional[List[float]] = None) -> Dict[str, Any]:
+        """
+        Convert a Recipe model to Elasticsearch document.
+        
+        Args:
+            recipe: Recipe object
+            embedding: Optional pre-computed embedding (if None, will be fetched/generated)
+        """
         # Skip malformed recipes
         if self._is_malformed_recipe(recipe):
             raise ValueError(f"Malformed recipe data - skipping")
@@ -178,7 +266,8 @@ class ElasticsearchService:
                 except:
                     instructions_array = [str(recipe.instructions)]
         
-        return {
+        # Build document
+        doc = {
             "_id": str(recipe.id),
             "_index": self.index_name,
             "_source": {
@@ -203,11 +292,20 @@ class ElasticsearchService:
                 "created_at": recipe.created_at.isoformat() if recipe.created_at else None
             }
         }
+        
+        # Add embedding if provided
+        if embedding:
+            doc["_source"]["embedding"] = embedding
+        
+        return doc
     
     async def index_recipe(self, recipe: Recipe) -> bool:
         """Index a single recipe."""
         try:
-            doc = self._recipe_to_document(recipe)
+            # Get or generate embedding
+            embedding = await self._get_recipe_embedding(recipe)
+            
+            doc = self._recipe_to_document(recipe, embedding=embedding)
             await self.client.index(
                 index=self.index_name,
                 id=str(recipe.id),
@@ -227,9 +325,114 @@ class ElasticsearchService:
         actions = []
         skipped_count = 0
         
+        # Fetch or generate embeddings in batch for efficiency
+        try:
+            from ..services.embedding_service import get_embedding_service
+            embedding_service = get_embedding_service()
+            has_embedding_service = True
+        except ImportError:
+            print("Warning: sentence-transformers not installed. Indexing without embeddings.")
+            has_embedding_service = False
+            recipe_embeddings = {}
+        
+        if not has_embedding_service:
+            # No embedding service available - index without embeddings
+            for recipe in recipes:
+                try:
+                    doc = self._recipe_to_document(recipe, embedding=None)
+                    actions.append(doc)
+                except ValueError:
+                    skipped_count += 1
+                except Exception as e:
+                    print(f"Warning: Failed to prepare recipe {recipe.id}: {str(e)}")
+            
+            # Bulk index without embeddings
+            success_count = 0
+            failed_count = 0
+            if actions:
+                try:
+                    success, failed = await async_bulk(
+                        self.client,
+                        actions,
+                        raise_on_error=False,
+                        raise_on_exception=False
+                    )
+                    success_count = success
+                    failed_count = len(actions) - success
+                except Exception as e:
+                    print(f"Error during bulk indexing: {str(e)}")
+                    failed_count = len(actions)
+            
+            return {
+                "success": success_count,
+                "failed": failed_count,
+                "skipped": skipped_count
+            }
+        
+        # Has embedding service - fetch or generate embeddings
+        recipe_embeddings = {}
+        
+        # Try to fetch from database first (if column exists)
+        try:
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                recipe_ids = [r.id for r in recipes]
+                
+                # Fetch existing embeddings from database
+                query = "SELECT id, embedding FROM recipes WHERE id = ANY($1)"
+                rows = await conn.fetch(query, recipe_ids)
+                
+                for row in rows:
+                    if row['embedding']:
+                        try:
+                            # Parse the vector string from PostgreSQL
+                            embedding_str = str(row['embedding'])
+                            embedding_str = embedding_str.strip('[]')
+                            embedding = [float(x.strip()) for x in embedding_str.split(',') if x.strip()]
+                            if len(embedding) == 384:
+                                recipe_embeddings[row['id']] = embedding
+                        except Exception as e:
+                            # If parsing fails, will generate below
+                            pass
+        except Exception as e:
+            # Database column might not exist, that's okay - we'll generate all
+            pass
+        
+        # Generate embeddings for recipes that don't have them
+        recipes_to_embed = [r for r in recipes if r.id not in recipe_embeddings]
+        if recipes_to_embed:
+            # Generate embeddings in batch
+            texts = [embedding_service.build_embedding_text(r) for r in recipes_to_embed]
+            generated_embeddings = embedding_service.generate_batch_embeddings(texts, batch_size=32)
+            
+            # Add to map
+            for recipe, embedding in zip(recipes_to_embed, generated_embeddings):
+                recipe_embeddings[recipe.id] = embedding
+            
+            # Optionally store in database (if column exists)
+            try:
+                pool = await get_pool()
+                async with pool.acquire() as conn:
+                    for recipe, embedding in zip(recipes_to_embed, generated_embeddings):
+                        try:
+                            embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
+                            await conn.execute(
+                                'UPDATE recipes SET embedding = $1::vector WHERE id = $2',
+                                embedding_str,
+                                recipe.id
+                            )
+                        except Exception as e:
+                            # Continue even if storing fails (column might not exist)
+                            pass
+            except Exception as e:
+                # Database column might not exist, that's okay
+                pass
+        
+        # Build documents with embeddings
         for recipe in recipes:
             try:
-                doc = self._recipe_to_document(recipe)
+                embedding = recipe_embeddings.get(recipe.id)
+                doc = self._recipe_to_document(recipe, embedding=embedding)
                 actions.append(doc)
             except ValueError as e:
                 # Malformed recipe - skip it

@@ -31,73 +31,53 @@ interface Recipe {
 
 const PAGE_SIZE = 10
 
-export default function SearchRecipes() {
+export default function SemanticSearch() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [totalHits, setTotalHits] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [searchMode, setSearchMode] = useState<'text' | 'semantic' | 'hybrid'>('text')
+  const [searchMode, setSearchMode] = useState<'semantic' | 'hybrid'>('semantic')
 
-  const searchRecipes = async (page: number = 1) => {
+  const semanticSearch = async (page: number = 1) => {
     if (!searchQuery.trim()) return
 
     setLoading(true)
     setError(null)
     
     try {
-      let searchBody: any = {
-        from: (page - 1) * PAGE_SIZE,
-        size: PAGE_SIZE,
-      }
-
-      // Build search based on mode
-      if (searchMode === 'text') {
-        // Traditional text search
-        searchBody.query = {
-          multi_match: {
-            query: searchQuery,
-            fields: ['title^2', 'description', 'instructions'],
-          },
-        }
-      } else if (searchMode === 'semantic') {
-        // Pure semantic search - backend will generate embedding
-        searchBody.query_text = searchQuery
-        searchBody.search_mode = 'semantic'
-        searchBody.knn = {
-          field: 'embedding',
-          k: PAGE_SIZE,
-          num_candidates: 100,
-        }
-      } else if (searchMode === 'hybrid') {
-        // Hybrid: combine text and semantic search
-        searchBody.query_text = searchQuery
-        searchBody.search_mode = 'hybrid'
-        searchBody.query = {
-          multi_match: {
-            query: searchQuery,
-            fields: ['title^2', 'description', 'instructions'],
-          },
-        }
-        searchBody.knn = {
-          field: 'embedding',
-          k: PAGE_SIZE,
-          num_candidates: 100,
-          boost: 0.5,
-        }
-      }
-
+      // For semantic search, we need to:
+      // 1. Generate embedding for the query (done on backend)
+      // 2. Use kNN search with that embedding
+      
       const response = await fetch('/api/recipes/_search', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(searchBody),
+        body: JSON.stringify({
+          from: (page - 1) * PAGE_SIZE,
+          size: PAGE_SIZE,
+          // Pure semantic search using kNN
+          knn: {
+            field: 'embedding',
+            query_vector: null, // Will be generated on backend from query text
+            k: PAGE_SIZE,
+            num_candidates: 100,
+          },
+          // Pass the query text so backend can generate embedding
+          query_text: searchQuery,
+          search_mode: searchMode,
+          _source: ['id', 'uuid', 'title', 'description', 'ingredients', 'instructions', 
+                   'prep_time_minutes', 'cook_time_minutes', 'total_time_minutes', 
+                   'servings', 'difficulty', 'cuisine_type', 'meal_type', 'dietary_tags',
+                   'source_url', 'reddit_score', 'reddit_author', 'created_at', 'updated_at'],
+        }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to search recipes')
+        throw new Error('Failed to perform semantic search')
       }
 
       const data = await response.json()
@@ -112,8 +92,8 @@ export default function SearchRecipes() {
         setError('No recipes found')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to search recipes')
-      console.error('Error searching recipes:', err)
+      setError(err instanceof Error ? err.message : 'Failed to perform semantic search')
+      console.error('Error performing semantic search:', err)
     } finally {
       setLoading(false)
     }
@@ -125,73 +105,67 @@ export default function SearchRecipes() {
   }, [searchQuery, searchMode])
 
   const handlePageChange = (page: number) => {
-    searchRecipes(page)
+    semanticSearch(page)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
     <div>
-      <h2>Recipe Search</h2>
+      <h2>Semantic Search</h2>
+      <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1rem' }}>
+        Find recipes by meaning, not just keywords. Try searching for concepts like "comfort food" or "healthy breakfast".
+      </p>
+      
       <div style={{ marginBottom: '1rem' }}>
         <div style={{ marginBottom: '0.5rem' }}>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && searchRecipes(1)}
-            placeholder="Search recipes..."
+            onKeyDown={(e) => e.key === 'Enter' && semanticSearch(1)}
+            placeholder="Search by meaning (e.g., 'comfort food', 'healthy breakfast')..."
             style={{ 
               padding: '0.5rem',
               width: '400px',
               marginRight: '0.5rem',
             }}
           />
-          <button onClick={() => searchRecipes(1)} disabled={loading}>
+          <button onClick={() => semanticSearch(1)} disabled={loading}>
             {loading ? 'Searching...' : 'Search'}
           </button>
         </div>
         
-        <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
-          <label style={{ marginRight: '1rem' }}>
-            <input
-              type="radio"
-              value="text"
-              checked={searchMode === 'text'}
-              onChange={(e) => setSearchMode(e.target.value as 'text' | 'semantic' | 'hybrid')}
-              style={{ marginRight: '0.25rem' }}
-            />
-            Text Search
-          </label>
+        <div style={{ marginTop: '0.5rem' }}>
           <label style={{ marginRight: '1rem' }}>
             <input
               type="radio"
               value="semantic"
               checked={searchMode === 'semantic'}
-              onChange={(e) => setSearchMode(e.target.value as 'text' | 'semantic' | 'hybrid')}
+              onChange={(e) => setSearchMode(e.target.value as 'semantic' | 'hybrid')}
               style={{ marginRight: '0.25rem' }}
             />
-            Semantic Search
+            Semantic Only
           </label>
           <label>
             <input
               type="radio"
               value="hybrid"
               checked={searchMode === 'hybrid'}
-              onChange={(e) => setSearchMode(e.target.value as 'text' | 'semantic' | 'hybrid')}
+              onChange={(e) => setSearchMode(e.target.value as 'semantic' | 'hybrid')}
               style={{ marginRight: '0.25rem' }}
             />
-            Hybrid (Text + Semantic)
+            Hybrid (Semantic + Text)
           </label>
         </div>
-        {searchMode !== 'text' && (
-          <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem' }}>
-            Semantic search finds recipes by meaning. Try queries like "comfort food" or "healthy breakfast".
-          </p>
-        )}
       </div>
+      
       {error && <p style={{ color: 'red' }}>{error}</p>}
+      
       {recipes.length > 0 && (
         <div>
+          <p style={{ marginBottom: '1rem', color: '#666' }}>
+            Found {totalHits} recipe{totalHits !== 1 ? 's' : ''}
+          </p>
           <Pagination
             currentPage={currentPage}
             totalResults={totalHits}

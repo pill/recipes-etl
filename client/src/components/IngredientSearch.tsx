@@ -25,6 +25,8 @@ interface Recipe {
   source_url?: string
   reddit_score?: number
   reddit_author?: string
+  created_at?: string
+  updated_at?: string
 }
 
 const PAGE_SIZE = 10
@@ -45,7 +47,7 @@ export default function IngredientSearch() {
       .filter(ing => ing.length > 0)
   }
 
-  const parseBooleanQuery = (input: string): any => {
+  const parseBooleanQuery = (input: string): Record<string, unknown> | null => {
     // Parse complex boolean queries like: "chicken AND (garlic OR onion) AND cheese"
     const tokens = input.match(/\b(AND|OR|NOT)\b|\(|\)|[^()\s]+/g) || []
     
@@ -103,10 +105,10 @@ export default function IngredientSearch() {
     return parseBooleanExpression(tokens)
   }
 
-  const parseBooleanExpression = (tokens: string[]): any => {
+  const parseBooleanExpression = (tokens: string[]): Record<string, unknown> => {
     let i = 0
     
-    const parseOr = (): any => {
+    const parseOr = (): Record<string, unknown> => {
       let left = parseAnd()
       
       while (i < tokens.length && tokens[i] === 'OR') {
@@ -123,7 +125,7 @@ export default function IngredientSearch() {
       return left
     }
 
-    const parseAnd = (): any => {
+    const parseAnd = (): Record<string, unknown> => {
       let left = parseNot()
       
       while (i < tokens.length && tokens[i] === 'AND') {
@@ -139,7 +141,7 @@ export default function IngredientSearch() {
       return left
     }
 
-    const parseNot = (): any => {
+    const parseNot = (): Record<string, unknown> => {
       if (i < tokens.length && tokens[i] === 'NOT') {
         i++ // consume 'NOT'
         return {
@@ -151,7 +153,7 @@ export default function IngredientSearch() {
       return parseTerm()
     }
 
-    const parseTerm = (): any => {
+    const parseTerm = (): Record<string, unknown> => {
       if (i < tokens.length && tokens[i] === '(') {
         i++ // consume '('
         const result = parseOr()
@@ -224,7 +226,7 @@ export default function IngredientSearch() {
       const data = await response.json()
       
       if (data.hits?.hits?.length > 0) {
-        setRecipes(data.hits.hits.map((hit: any) => hit._source))
+        setRecipes(data.hits.hits.map((hit: { _source: Recipe }) => hit._source))
         setTotalHits(data.hits.total.value)
         setCurrentPage(page)
       } else {
@@ -328,6 +330,8 @@ export default function IngredientSearch() {
               source_url={recipe.source_url}
               reddit_score={recipe.reddit_score}
               reddit_author={recipe.reddit_author}
+              created_at={recipe.created_at}
+              updated_at={recipe.updated_at}
             />
           ))}
           <Pagination
