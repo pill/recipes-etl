@@ -3,7 +3,7 @@
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from ..services.elasticsearch_service import ElasticsearchService
 from ..services.embedding_service import get_embedding_service
@@ -23,15 +23,14 @@ app.add_middleware(
 
 class SearchRequest(BaseModel):
     """Search request model."""
+    model_config = ConfigDict(populate_by_name=True)
+    
     query_text: Optional[str] = None
     search_mode: Optional[str] = "text"  # text, semantic, or hybrid
     from_: int = Field(default=0, alias="from")  # Support Elasticsearch 'from' field
     size: int = 10
     knn: Optional[Dict[str, Any]] = None
     query: Optional[Dict[str, Any]] = None
-    
-    class Config:
-        populate_by_name = True
 
 
 @app.post("/api/recipes/_search")
